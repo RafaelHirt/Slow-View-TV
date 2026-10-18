@@ -33,6 +33,8 @@ Na apresentação desta sessão, navegação, ampliação, reprodução e layout
 
 ## Executar
 
+Para o template RunPod PyTorch/Ubuntu 24.04, consulte [o instalador e o guia do piloto](docs/runpod-pilot.md). O guia inclui volume persistente, diagnóstico gráfico e conexão da API ao site Netlify. O procedimento ainda requer validação no Pod real.
+
 Requisitos: Node.js 24+, npm, Chromium e FFmpeg com encoder `libx264`. O navegador local precisa suportar WebGL. Nesta máquina, os executáveis estão em `/usr/bin/chromium` e `/usr/bin/ffmpeg`.
 
 ```sh

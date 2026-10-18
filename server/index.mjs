@@ -34,7 +34,10 @@ export async function startServer(options = {}) {
   const signingKey = randomBytes(32);
   const allowedOrigins = new Set((options.corsOrigins ?? process.env.CORS_ORIGINS ?? '').split(',').map((item) => item.trim()).filter(Boolean));
   allowedOrigins.add(new URL(appOrigin).origin);
-  const db = openDatabase(dataDir);
+  const db = openDatabase(dataDir, {
+    journalMode: options.sqliteJournalMode ?? process.env.SLOWVISTA_SQLITE_JOURNAL_MODE ?? 'WAL',
+    lockingMode: options.sqliteLockingMode ?? process.env.SLOWVISTA_SQLITE_LOCKING_MODE ?? 'NORMAL',
+  });
   let auth;
   try {
     auth = await createAuth({ db, allowedOrigins, adminToken,

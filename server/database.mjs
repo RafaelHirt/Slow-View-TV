@@ -3,12 +3,18 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { VIDEO_FORMATS } from './validation.mjs';
 
-export function openDatabase(dataDir) {
+export function openDatabase(dataDir, { journalMode = 'WAL', lockingMode = 'NORMAL' } = {}) {
+  if (!['WAL', 'DELETE'].includes(journalMode)) throw new Error('O modo de journal SQLite deve ser WAL ou DELETE.');
+  if (!['NORMAL', 'EXCLUSIVE'].includes(lockingMode)) throw new Error('O modo de lock SQLite deve ser NORMAL ou EXCLUSIVE.');
   mkdirSync(dataDir, { recursive: true });
   const db = new DatabaseSync(join(dataDir, 'slowvista.sqlite'));
+  try {
+    const actual = db.prepare(`PRAGMA journal_mode = ${journalMode}`).get().journal_mode;
+    if (actual.toUpperCase() !== journalMode) throw new Error('O volume não aceitou o modo de journal SQLite solicitado.');
+    db.exec(`PRAGMA locking_mode = ${lockingMode};`);
+    if (lockingMode === 'EXCLUSIVE') db.exec('BEGIN EXCLUSIVE; COMMIT;');
   db.exec(`
     PRAGMA foreign_keys = ON;
-    PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS routes (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL,
       source_name TEXT NOT NULL, transport TEXT NOT NULL, is_demo INTEGER NOT NULL,
@@ -52,6 +58,7 @@ export function openDatabase(dataDir) {
   db.prepare(`UPDATE jobs SET status = 'failed', error = ?, output_file = NULL WHERE status IN ('queued','rendering')`)
     .run('A renderização foi interrompida pela reinicialização do servidor. Gere o vídeo novamente.');
   return db;
+  } catch (error) { db.close(); throw error; }
 }
 
 export function planFromRow(row) {

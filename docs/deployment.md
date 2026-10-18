@@ -1,6 +1,6 @@
 # Abrir o Slow View TV por um endereço web
 
-Configuração proposta para revisão. O aplicativo ainda não foi publicado; não há servidor contratado, credenciais de implantação ou GPU provisionada nesta tarefa.
+O usuário publicou o painel em `https://slow-view-tv.netlify.app`. A API pública ainda precisa ser hospedada e conectada. Nenhuma GPU foi provisionada por este ambiente. Para o piloto no template RunPod escolhido, consulte [o procedimento específico](runpod-pilot.md).
 
 ## Arquitetura desta versão
 
