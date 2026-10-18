@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="SlowVista Studio" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>Percurso de ensaio — ilustrativo</name><desc>Dados fictícios para testar a importação; não representam uma viagem real.</desc></metadata>
+  <trk><name>Percurso de ensaio — ilustrativo</name><trkseg>
+    <trkpt lat="-25.0000" lon="-49.0000"><ele>550</ele></trkpt>
+    <trkpt lat="-24.9980" lon="-48.9985"><ele>551</ele></trkpt>
+    <trkpt lat="-24.9960" lon="-48.9970"><ele>552</ele></trkpt>
+    <trkpt lat="-24.9940" lon="-48.9960"><ele>553</ele></trkpt>
+    <trkpt lat="-24.9920" lon="-48.9955"><ele>554</ele></trkpt>
+    <trkpt lat="-24.9900" lon="-48.9956"><ele>554</ele></trkpt>
+    <trkpt lat="-24.9880" lon="-48.9960"><ele>553</ele></trkpt>
+    <trkpt lat="-24.9860" lon="-48.9958"><ele>552</ele></trkpt>
+    <trkpt lat="-24.9840" lon="-48.9950"><ele>551</ele></trkpt>
+    <trkpt lat="-24.9820" lon="-48.9935"><ele>550</ele></trkpt>
+    <trkpt lat="-24.9800" lon="-48.9915"><ele>550</ele></trkpt>
+    <trkpt lat="-24.9780" lon="-48.9890"><ele>551</ele></trkpt>
+    <trkpt lat="-24.9760" lon="-48.9865"><ele>552</ele></trkpt>
+    <trkpt lat="-24.9740" lon="-48.9840"><ele>553</ele></trkpt>
+    <trkpt lat="-24.9720" lon="-48.9820"><ele>554</ele></trkpt>
+    <trkpt lat="-24.9700" lon="-48.9805"><ele>554</ele></trkpt>
+    <trkpt lat="-24.9680" lon="-48.9800"><ele>553</ele></trkpt>
+    <trkpt lat="-24.9660" lon="-48.9795"><ele>552</ele></trkpt>
+    <trkpt lat="-24.9640" lon="-48.9790"><ele>551</ele></trkpt>
+    <trkpt lat="-24.9620" lon="-48.9780"><ele>550</ele></trkpt>
+  </trkseg></trk>
+</gpx>
