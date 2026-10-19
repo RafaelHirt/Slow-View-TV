@@ -43,9 +43,15 @@ Foi consultada a página individual de [trem na neve em Himachal Pradesh, de sha
 
 O conector de busca Pexels existe localmente, mas a chave está ausente. Ele não pesquisa NRK nem bancos pagos. A amostra usa um link direto oficial, sem chave e sem pesquisa automática em massa.
 
-### Hurtigruten: referência adicional, ainda sem aprovação completa
+### Telemarkskanalen e Hurtigruten: fontes adicionais para navios
 
-Foi lida a [publicação de 2011 sobre a distribuição Full HD](https://nrkbeta.no/2011/12/21/hurtigrutenbonanza-splitterny-full-hd-nedlasting-bittorrent-hele-sendingen/). Ela descreve 134h42m45s, uma mixagem sem a música protegida da transmissão e 161 partes, totalizando cerca de 555 GB. Esse artigo foi consultado, mas a licença específica e os arquivos não foram integralmente verificados nesta rodada. Não classificar este candidato com o mesmo grau de aprovação dos três acima nem iniciar a transferência desse volume para o piloto.
+Pesquisa complementar confirmou na [publicação da Telemarkskanalen](https://nrkbeta.no/2012/11/12/endelig-last-ned-telemarkskanalen-minutt-for-minutt/) a câmera frontal do MS Victoria e seu backup sob CC BY-SA 3.0 Noruega. A NRK cita 11,5h de material e publica GPS/pontos de interesse. O programa completo é explicitamente apenas para assistir, sem autorização de remix/redistribuição. Os links dos arquivos e o GPS ainda não entregaram material nesta pesquisa.
+
+Para Hurtigruten, foram lidos o [artigo original](https://nrkbeta.no/2011/06/16/hurtigruten-eng/) e o [FAQ](https://nrkbeta.no/2011/06/21/hurtigruten-faq-eng/), confirmando CC BY-SA 3.0 para a câmera frontal e exigência de crédito final e link. O projeto cobre uma viagem de aproximadamente 134h Bergen → Kirkenes, gravada em junho, sob o sol da meia-noite; ainda não foi auditada a cobertura dos arquivos disponíveis. Não presumir noite escura durante toda a faixa noturna.
+
+Foi também lida a [publicação posterior sobre a distribuição Full HD](https://nrkbeta.no/2011/12/21/hurtigrutenbonanza-splitterny-full-hd-nedlasting-bittorrent-hele-sendingen/): 134h42m45s, mixagem sem música protegida, 161 partes/555 GB. Não foi automaticamente aplicada a licença da câmera frontal a esse outro conjunto. Nenhuma transferência integral foi iniciada.
+
+O [inventário ampliado](content-inventory.md) registra as distinções de arquivos, clipes adicionais Pexels/Pixabay, fontes ainda bloqueadas, a programação simultânea proposta e uma ferramenta de pesquisa para alterar iluminação por IA. A licença Pixabay foi consultada nesta pesquisa; a restrição de distribuição standalone precisa ser observada. Esses registros ainda não são materiais importados no painel nem transmissões configuradas.
 
 ## Opções pagas a comparar
 

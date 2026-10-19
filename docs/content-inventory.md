@@ -1,0 +1,51 @@
+# Inventário para biblioteca e programação
+
+Pesquisa de 19/10/2026. Este inventário registra fontes e condições consultadas, não um catálogo já importado no painel. A nova versão do backend ainda depende da atualização do Pod pelo usuário; não há transmissão YouTube configurada.
+
+## Produto definido com o usuário
+
+- Biblioteca com vídeos disponíveis para reprodução individual, pausa e busca por tempo.
+- Programações independentes para trem, navio, caminhada e outros segmentos. As estações do ano são versões de uma viagem, não uma contagem automática de canais.
+- Possibilidade de quatro transmissões simultâneas, sujeita à capacidade medida e à configuração da conta YouTube. Cada transmissão tem sua própria grade e saída. Começar validando uma saída antes de ativar várias.
+- Cada programação usa o fuso, a estação e a iluminação do local filmado. Quando não houver material compatível, fica inativa; a biblioteca continua disponível. Não presumir um horário único para toda a Europa nem que uma hora fixa signifique noite em qualquer latitude.
+- Relógio atual gerado pela programação/player/transmissor, independente do arquivo original. O mapa usa o tempo e a posição da filmagem. As imagens são identificadas como arquivo; iluminação sintética, se aprovada, deve ser identificada como alteração por IA.
+- Escolha inicial: painel Netlify controla a API; FFmpeg no servidor RunPod envia o sinal ao YouTube. OBS é uma opção de composição/transmissão, sem integração instalada no piloto. O servidor deve permanecer ligado durante a transmissão.
+
+## Viagens longas
+
+| Material | Segmento e duração publicada | Direitos verificados | Estado de obtenção |
+| --- | --- | --- | --- |
+| [Nordlandsbanen](https://nrkbeta.no/2013/01/15/nordlandsbanen-minute-by-minute-season-by-season/) | Trem Trondheim → Bodø; quatro gravações sazonais de aproximadamente 10h cada | Publicação de download declara CC BY-SA 3.0 | Metadados do torrent de verão obtidos; vídeos e GPS ainda não recebidos |
+| [Bergensbanen](https://nrkbeta.no/2009/12/18/bergensbanen-eng/) | Trem Bergen → Oslo; câmera frontal limpa de aproximadamente 7h | CC BY-SA 3.0, com crédito específico ao final e na descrição | Metadados do torrent obtidos; vídeo não recebido |
+| [Flåmsbanen](https://nrkbeta.no/2010/09/03/last-ned-flaamsbana-i-2d-og-3d/) | Trem Myrdal → Flåm; duração do arquivo ainda não conferida | CC BY-SA 3.0 Noruega segundo a atualização da publicação | Metadados do torrent obtidos; vídeo não recebido |
+| [Telemarkskanalen](https://nrkbeta.no/2012/11/12/endelig-last-ned-telemarkskanalen-minutt-for-minutt/) | Navio MS Victoria, canal norueguês; publicação cita 11,5h de material | **Somente câmera frontal e backup:** CC BY-SA 3.0 Noruega | Página e links originais consultados; arquivos e GPS não recebidos |
+| [Hurtigruten](https://nrkbeta.no/2011/06/16/hurtigruten-eng/) | Viagem marítima Bergen → Kirkenes; projeto de 134h | Câmera frontal sob CC BY-SA 3.0, confirmada também no FAQ; créditos específicos | Ainda localizar/validar os arquivos correspondentes à câmera licenciada; duração efetiva e cobertura desses arquivos não auditadas |
+
+### Distinções importantes dos arquivos
+
+**Telemarkskanalen:** a própria NRK diz que a gravação televisiva completa, mesmo sem música, é apenas para assistir e não é licenciada para editar/redistribuir. O torrent `telemarkskanalen.program...` do índice geral não deve ser importado como se fosse a câmera frontal CC. O artigo publica links distintos para a câmera frontal, backup, GPS e pontos de interesse. As hipóteses de migração desses links para `/torrent/` no NRKbeta retornaram 404; isso não comprova que os links antigos ou peers estejam disponíveis. Não confundir existência da página com download realizado.
+
+**Hurtigruten:** o [FAQ oficial](https://nrkbeta.no/2011/06/21/hurtigruten-faq-eng/) diferencia a câmera frontal licenciada do programa com música e imagens de terceiros. A [publicação de dezembro de 2011](https://nrkbeta.no/2011/12/21/hurtigrutenbonanza-splitterny-full-hd-nedlasting-bittorrent-hele-sendingen/) oferece outro conjunto, de 161 partes/555 GB com mixagem sem música. A licença da câmera frontal não foi automaticamente estendida por nós a esse conjunto. O projeto foi gravado em junho e apresentado como viagem sob o sol da meia-noite; não presumir que cubra a noite escura de outras estações.
+
+**Nordlandsbanen:** originais e versões sincronizadas entre estações são materiais diferentes. Nos comentários da [publicação de download](https://nrkbeta.no/2012/12/29/konkurrer-og-last-ned-den-synkrone-nordlandsbanen-minutt-for-minutt/), Jon Ståle Carlsen/NRK explica que o som original das outras estações perde correspondência após o remapeamento para o verão. No [calendário dos originais](https://nrkbeta.no/2012/11/30/julekalender-nordlandsbanen/), confirma gravação simultânea de som e imagem; menciona também diferenças entre canais mono/estéreo. Priorizar a avaliação dos originais para preservar som e movimento naturais. Nenhum desses relatos substitui FFprobe e escuta do arquivo recebido. A disponibilidade de trechos noturnos ainda não foi auditada.
+
+## Outras fontes e clipes concretos
+
+| Fonte/item | Material identificado na página | Condições e utilidade |
+| --- | --- | --- |
+| [Pexels — trem na neve, shalender kumar](https://www.pexels.com/video/a-train-travelling-through-the-railroad-in-the-snowy-mountain-of-himachal-in-india-3563086/) | Arquivo 25,92s/720p/25fps com áudio, já obtido e editado no ensaio de 20s | Licença Pexels consultada; fonte 4K também oferecida. Teste técnico, sem rota completa confirmada |
+| [Pexels — Night Stroll Through Illuminated City Streets](https://www.pexels.com/video/night-stroll-through-illuminated-city-streets-35140402/) | Burak Bahadır Büyükkılınç; página informa 37s, 1920×1080, 50fps; pessoa caminhando à noite | Página do item consultada; clipe curto, não uma caminhada longa em primeira pessoa. Localização/rota e adequação editorial ainda precisam de revisão |
+| [Pexels — Serene Boat Ride on a Tranquil River](https://www.pexels.com/video/serene-boat-ride-on-a-tranquil-river-28927774/) | Vikas Sagar; página informa 39s, 1920×1080, 59,94fps | Página do item consultada; candidato curto para ensaio de barco, sem trajeto contínuo georreferenciado confirmado |
+| [Pixabay — Seoul, Street, Night](https://pixabay.com/videos/seoul-street-night-neon-traffic-21116/) | RafterJr72; página e dados estruturados indicam 7s de rua noturna | Item e [licença](https://pixabay.com/service/license-summary/) consultados. Não é caminhada longa. A licença veta distribuição standalone, definida como material que permanece substancialmente na mesma forma sem esforço criativo; não aprovar loop com relógio como uso comercial por padrão |
+
+A [licença Pexels](https://www.pexels.com/license/) permite uso gratuito e modificação, com restrições próprias. Os termos não são iguais aos do Pixabay. Recursos de bancos não se tornam automaticamente compatíveis com uma adaptação NRK sob BY-SA. Nenhuma compra, contato com criador ou aprovação de monetização foi realizada. Não foi encontrada nesta pesquisa uma caminhada longa completa com arquivo e autorização comercial comprovados. Licenciar o original diretamente com o criador permanece uma alternativa a investigar; não houve contato.
+
+Foram obtidas três prévias dos CDNs oficiais, com limite de 15 MB cada, e examinados metadados e um quadro de cada arquivo: barco Pexels 39,5395s/640×360/59,94fps; cena noturna Pexels 37,16s/640×360/50fps; Seul Pixabay 6,8s/960×540/25fps. As três prévias não contêm faixa de áudio; isso não comprova ausência de som em todas as versões originais. O barco mostra um rio com aves e outra embarcação; a cena noturna acompanha uma pessoa por trás; Seul mostra um cruzamento com rastros luminosos de veículos. Nenhuma é uma viagem longa em primeira pessoa já aprovada para o canal. Não foram assistidas/ouvidas integralmente nem importadas no painel do usuário. O teste de trem anterior continua sendo a única exportação real concluída neste fluxo.
+
+Outros destinos consultados: Commons, Coverr, Motion Places e NOAA tiveram bloqueio de túnel HTTP 403; o item de busca Pond5 devolveu HTTP 403. Não foram verificados arquivos, preços ou licenças nesses destinos. Não apresentar seus resultados como fontes aprovadas.
+
+## Alterar dia/noite por IA
+
+[Light-A-Video](https://github.com/bcmi/Light-A-Video) é uma implementação de pesquisa consultada, com código sob Apache 2.0. Documenta alteração de iluminação em vídeo e técnicas para reduzir inconsistência temporal. O exemplo de configuração examinado usa 512×512; não estabelece desempenho em 4K ou em viagens de dez horas. Modelos e dependências têm licenças próprias, ainda não revisadas integralmente para nosso uso.
+
+Não foi instalado, integrado ou executado no RunPod. Um ensaio deve usar 5–10 segundos de material autorizado, original preservado, comparação em movimento e medição de tempo/memória. Avaliar estabilidade de luz, detalhes, letreiros, janelas, faróis e reflexos. Conversão noite → dia pode inventar conteúdo não registrado nas sombras; dia → noite também exige coerência de luzes e reflexos. Uma versão sintética não comprova como o lugar realmente parecia naquele período. Não escalar para horas nem escolher um modelo comercial antes de avaliar o ensaio e seus termos.
