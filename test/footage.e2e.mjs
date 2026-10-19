@@ -11,7 +11,7 @@ const execute = promisify(execFile), directory = await mkdtemp(join(tmpdir(), 's
 const artifacts = resolve('artifacts'); await mkdir(artifacts, { recursive: true });
 const video = join(directory, 'fixture-tecnica.mp4');
 // This test pattern verifies the editor. It is never added to the user's catalogue.
-await execute('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=darkseagreen:s=1280x720:r=30:d=6', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=6', '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '2', '-c:a', 'aac', '-shortest', video]);
+await execute('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=darkseagreen:s=1280x720:r=25:d=5.92', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=5.92', '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '2', '-c:a', 'aac', '-shortest', video]);
 const password = 'senha-exclusiva-do-teste-de-edicao';
 const service = await startServer({ port: 0, dataDir: join(directory, 'data'), dashboardPassword: password, enableWorker: false });
 let browser;
@@ -51,13 +51,20 @@ try {
   const source = page.getByLabel('Filmagem original: Fixture técnica — não é filmagem real');
   await source.evaluate(video => new Promise(resolve => { if (video.readyState >= 1) resolve(); else video.addEventListener('loadedmetadata', resolve, { once: true }); }));
   assert.equal(await source.evaluate(video => video.paused && !video.autoplay && video.volume <= .3), true);
+  const startInput = page.getByLabel('Início (segundos)'), endInput = page.getByLabel('Fim (segundos)');
+  assert.equal(Number(await endInput.inputValue()), 5.92, 'the default endpoint keeps the complete source duration');
+  assert.equal(await endInput.evaluate(input => input.checkValidity()), true, 'a fractional source duration must not block export');
+  await startInput.fill('0.04');
+  assert.equal(await startInput.evaluate(input => input.checkValidity()), true, 'fractional starting positions are accepted');
+  await startInput.fill('0');
   await page.getByLabel('Nome do vídeo').fill('Trecho técnico de teste');
-  await page.getByLabel('Início (segundos)').fill('1'); await page.getByLabel('Fim (segundos)').fill('5');
+  // Export the default complete selection: the reported bug required users to
+  // change a valid source duration (e.g. 25.92s) just to submit this form.
   await page.getByRole('button', { name: 'Exportar trecho em MP4' }).click();
   await page.getByText('Pronto para assistir', { exact: true }).waitFor({ timeout: 60000 });
   const result = page.getByLabel('Edição: Trecho técnico de teste');
   await result.evaluate(video => new Promise(resolve => { if (video.readyState >= 1) resolve(); else video.addEventListener('loadedmetadata', resolve, { once: true }); }));
-  assert.equal(await result.evaluate(video => video.paused && !video.autoplay && Math.abs(video.duration - 4) < .1), true);
+  assert.equal(await result.evaluate(video => video.paused && !video.autoplay && Math.abs(video.duration - 5.92) < .1), true);
   await page.getByRole('button', { name: 'Assistir sem distrações' }).click();
   const dialog = page.getByRole('dialog'); await dialog.waitFor();
   const quietVideo = dialog.locator('video');
@@ -81,5 +88,5 @@ try {
   await page.getByRole('button', { name: 'Entrar no ateliê' }).waitFor();
   assert.equal((await fetch(`${service.baseUrl}/api/footage/assets`)).status, 401);
   assert.deepEqual(errors, []);
-  console.log('✓ Login, catálogo Trem, amostra com direitos pendentes, upload, edição FFmpeg, player sem autoplay, volume, pausa opcional, Escape, créditos, Range, mobile e logout.');
+  console.log('✓ Login, catálogo Trem, amostra com direitos pendentes, upload, exportação com duração fracionária, edição FFmpeg, player sem autoplay, volume, pausa opcional, Escape, créditos, Range, mobile e logout.');
 } finally { await browser?.close(); await service.close(); await rm(directory, { recursive: true, force: true }); }
