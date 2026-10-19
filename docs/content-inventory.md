@@ -1,6 +1,6 @@
 # Inventário para biblioteca e programação
 
-Pesquisa de 19/10/2026. Este inventário registra fontes e condições consultadas, não um catálogo de viagens longas já importado no painel. O usuário confirmou por capturas a instalação do novo editor no Pod, a importação da amostra Pexels de trem e a exportação de 20 segundos/720p com áudio, aberta no player sem distrações. Isso valida o fluxo básico naquele Pod; não aprova a qualidade editorial, o áudio ouvido ou as viagens longas. Não há transmissão YouTube configurada.
+Pesquisa de 19/10/2026. Este inventário registra fontes e condições consultadas, não um catálogo de viagens longas já importado no painel. O usuário confirmou por capturas o novo painel na Netlify, a importação da amostra Pexels de trem e a exportação de 20 segundos/720p no Pod, aberta no player sem distrações. O arquivo tem faixa AAC, mas o usuário não ouviu som: análise integral posterior do original e da edição confirmou silêncio efetivo (média/pico -91 dBFS). Isso valida o fluxo básico de imagem/exportação naquele Pod; não valida uma experiência com som de trem nem as viagens longas. Não há transmissão YouTube configurada.
 
 ## Produto definido com o usuário
 
@@ -21,6 +21,12 @@ Pesquisa de 19/10/2026. Este inventário registra fontes e condições consultad
 | [Telemarkskanalen](https://nrkbeta.no/2012/11/12/endelig-last-ned-telemarkskanalen-minutt-for-minutt/) | Navio MS Victoria, canal norueguês; publicação cita 11,5h de material | **Somente câmera frontal e backup:** CC BY-SA 3.0 Noruega | Página e links originais consultados; arquivos e GPS não recebidos |
 | [Hurtigruten](https://nrkbeta.no/2011/06/16/hurtigruten-eng/) | Viagem marítima Bergen → Kirkenes; projeto de 134h | Câmera frontal sob CC BY-SA 3.0, confirmada também no FAQ; créditos específicos | Ainda localizar/validar os arquivos correspondentes à câmera licenciada; duração efetiva e cobertura desses arquivos não auditadas |
 
+### Próxima prova com uma viagem completa
+
+Começar pela Flåmsbanen 2D, Myrdal → Flåm: o [torrent oficial identificado](https://nrkbeta.no/torrent/Flamsbanen.hele.turen.1920x1080.h264.NRK.torrent) descreve um único MP4 Full HD de **3.763.728.590 bytes**, menor que os candidatos Bergensbanen e Nordlandsbanen. Info hash: `218fafb2d888ad44e217f13e96c722bf4fd83920`. O metadado foi obtido; isso não confirma peers ativos nem obtenção do vídeo.
+
+A sequência é obter o arquivo no volume persistente do Pod, conferir duração/imagem e medir/ouvir o áudio, preparar uma amostra contínua de 60–90 segundos e comparar com o original. Somente depois, associar os dados documentados da rota e sincronizar o mapa com pontos confirmados na filmagem. O importador atual tem limite padrão de 512 MB e não aceita links de torrent; não colar esse link no campo Pexels/Pixabay nem classificar a licença NRK como Pexels. A ingestão de arquivos longos e o registro explícito de CC BY-SA ainda precisam ser preparados para disponibilizar a viagem no painel.
+
 ### Distinções importantes dos arquivos
 
 **Telemarkskanalen:** a própria NRK diz que a gravação televisiva completa, mesmo sem música, é apenas para assistir e não é licenciada para editar/redistribuir. O torrent `telemarkskanalen.program...` do índice geral não deve ser importado como se fosse a câmera frontal CC. O artigo publica links distintos para a câmera frontal, backup, GPS e pontos de interesse. As hipóteses de migração desses links para `/torrent/` no NRKbeta retornaram 404; isso não comprova que os links antigos ou peers estejam disponíveis. Não confundir existência da página com download realizado.
@@ -33,7 +39,7 @@ Pesquisa de 19/10/2026. Este inventário registra fontes e condições consultad
 
 | Fonte/item | Material identificado na página | Condições e utilidade |
 | --- | --- | --- |
-| [Pexels — trem na neve, shalender kumar](https://www.pexels.com/video/a-train-travelling-through-the-railroad-in-the-snowy-mountain-of-himachal-in-india-3563086/) | Arquivo 25,92s/720p/25fps com áudio, já obtido e editado no ensaio de 20s | Licença Pexels consultada; fonte 4K também oferecida. Teste técnico, sem rota completa confirmada |
+| [Pexels — trem na neve, shalender kumar](https://www.pexels.com/video/a-train-travelling-through-the-railroad-in-the-snowy-mountain-of-himachal-in-india-3563086/) | Arquivo 25,92s/720p/25fps com faixa AAC silenciosa, já obtido e editado no ensaio de 20s | Licença Pexels consultada; fonte 4K também oferecida, áudio dessa versão não auditado. Teste técnico, sem rota completa confirmada |
 | [Pexels — Night Stroll Through Illuminated City Streets](https://www.pexels.com/video/night-stroll-through-illuminated-city-streets-35140402/) | Burak Bahadır Büyükkılınç; página informa 37s, 1920×1080, 50fps; pessoa caminhando à noite | Página do item consultada; clipe curto, não uma caminhada longa em primeira pessoa. Localização/rota e adequação editorial ainda precisam de revisão |
 | [Pexels — Serene Boat Ride on a Tranquil River](https://www.pexels.com/video/serene-boat-ride-on-a-tranquil-river-28927774/) | Vikas Sagar; página informa 39s, 1920×1080, 59,94fps | Página do item consultada; candidato curto para ensaio de barco, sem trajeto contínuo georreferenciado confirmado |
 | [Pixabay — Seoul, Street, Night](https://pixabay.com/videos/seoul-street-night-neon-traffic-21116/) | RafterJr72; página e dados estruturados indicam 7s de rua noturna | Item e [licença](https://pixabay.com/service/license-summary/) consultados. Não é caminhada longa. A licença veta distribuição standalone, definida como material que permanece substancialmente na mesma forma sem esforço criativo; não aprovar loop com relógio como uso comercial por padrão |

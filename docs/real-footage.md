@@ -8,7 +8,7 @@ A aba **Trem** apresenta o catálogo editorial inicial de Nordlandsbanen, Flåms
 
 ## Primeiro vídeo
 
-1. Abra a biblioteca. Na biblioteca vazia, **Preparar importação da amostra** preenche os dados de uma filmagem real de trem na neve, de cerca de 26 segundos, com som original. A fonte é Pexels, não NRK; percurso e modelo do trem permanecem não identificados. A importação exige sua conferência e não começa automaticamente. Veja [o guia do teste](pilot-real-footage.md). Também pode usar os atalhos do Pexels ou Pixabay para procurar outra filmagem.
+1. Abra a biblioteca. Na biblioteca vazia, **Preparar importação da amostra** preenche os dados de uma filmagem real de trem na neve, de cerca de 26 segundos. O arquivo 720p tem faixa AAC, mas está sem som audível, confirmado por medição integral do original e da edição. A fonte é Pexels, não NRK; percurso e modelo do trem permanecem não identificados. A importação exige sua conferência e não começa automaticamente. Veja [o guia do teste](pilot-real-footage.md). Também pode usar os atalhos do Pexels ou Pixabay para procurar outra filmagem.
 2. Assista à fonte e confira as condições de edição e publicação na página original. Um vídeo disponível na internet não implica autorização de reutilização. A biblioteca registra a declaração do criador, sem certificar a licença automaticamente.
 3. Baixe o arquivo autorizado e use **Adicionar material**. Informe título, fonte, autor, licença e condições relevantes. Também é possível guardar um material ainda não conferido; a exportação exige a conferência.
 4. Em **Assistir e editar**, selecione início e fim em segundos. Esta versão exporta um único trecho contínuo; ainda não monta vários clipes numa linha do tempo.

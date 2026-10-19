@@ -7,11 +7,12 @@ Decisão de 19/10/2026: manter o painel na **Netlify** e reutilizar o **RunPod e
 - Fonte: [filmagem de trem na neve, shalender kumar / Pexels](https://www.pexels.com/video/a-train-travelling-through-the-railroad-in-the-snowy-mountain-of-himachal-in-india-3563086/).
 - [Licença Pexels](https://www.pexels.com/license/) e página do item consultadas em 19/10/2026, HTTP 200. A licença permite uso gratuito e modificação, com restrições de redistribuição, cópias sem alterações, endosso e outros usos descritos na página.
 - Arquivo 720p obtido do CDN oficial: **10.055.062 bytes**, duração FFprobe **25,92 s**, H.264 progressivo, **1280×720, 25 fps**, áudio AAC estéreo a 48 kHz.
+- Correção após relato do usuário: a faixa AAC está **efetivamente silenciosa**. FFmpeg `volumedetect` sobre todo o original e toda a edição mediu média e pico de **-91 dBFS** em ambos (piso de medição), analisando 2.488.320 e 1.921.024 amostras respectivamente. A presença da faixa não comprova som audível; o editor não retirou um som que existia. Isso não estabelece o áudio de outras versões da fonte.
 - SHA-256 do arquivo obtido: `a516b8ecf2f62696d8296ea0d38e326524cc77a9509267b493dbb8f76c017fe9`.
 - A fonte informa Himachal Pradesh, Índia. Origem, destino, modelo do trem e posição por tempo não estão confirmados. Não associar este clipe às viagens norueguesas da aba Trem nem inventar um mapa.
 - O autor disponibiliza também uma versão 3840×2160. Para uma futura edição em 4K, avaliar essa fonte antes de ampliar 720p por IA. O ensaio usa 720p para transferir e processar pouco material.
 
-Edição de teste: **20 segundos**, do segundo 2 ao 22, sem cortes internos, com áudio original, nivelamento e fades. Não é uma produção longa, tratamento por IA, aprovação de conforto ou promessa de monetização. O original é preservado para comparação. A avaliação editorial de movimento e sons repentinos ainda deve ser feita assistindo e ouvindo.
+Edição de teste: **20 segundos**, do segundo 2 ao 22, sem cortes internos, preservando a faixa original silenciosa, com processamento de nivelamento e fades. Nivelamento não cria som ausente. Não é uma produção longa, tratamento por IA, aprovação de conforto ou promessa de monetização. O original é preservado para comparação. Esta amostra valida importação, imagem e exportação; a avaliação de som ambiente exige outro material com som audível.
 
 ## Como testar no painel
 
@@ -52,7 +53,7 @@ npm run review:footage
 
 Usa um banco temporário separado e autenticação própria, consulta o CDN Pexels respeitando o proxy configurado, limita a importação a 20 MB e espera no máximo 90 segundos para o download e cinco minutos para a edição. Não conecta ao Pod do usuário nem altera seu catálogo. Salva original, MP4 editado, créditos e relatório em `artifacts/real-footage-pilot/`, fora do Git. Esse comando é uma verificação explícita com rede; a suíte comum continua usando fixtures técnicas declaradas.
 
-Validação local em 19/10/2026: suíte completa **60/60**; build; navegador com login, aba Trem, dados da amostra sem confirmação automática de direitos, upload, edição, player, créditos, seeking, mobile e logout; e importação real Pexels com saída **20s/720p/25fps e áudio**. O tempo observado de preparação e obtenção dessa saída foi 132,7s na CPU do ambiente de desenvolvimento, concorrendo com outros checks. Não é um benchmark do RunPod nem uma medida de custo por vídeo. Mapas, restauração com IA, publicação Netlify e execução da nova versão no Pod não foram validados por esses testes.
+Validação local em 19/10/2026: suíte completa **60/60**; build; navegador com login, aba Trem, dados da amostra sem confirmação automática de direitos, upload, edição, player, créditos, seeking, mobile e logout; e importação real Pexels com saída **20s/720p/25fps e faixa AAC silenciosa**. O tempo observado de preparação e obtenção dessa saída foi 132,7s na CPU do ambiente de desenvolvimento, concorrendo com outros checks. Não é um benchmark do RunPod nem uma medida de custo por vídeo. Mapas, restauração com IA, publicação Netlify e execução da nova versão no Pod não foram validados por esses testes. Posteriormente, capturas do usuário confirmaram o novo painel na Netlify e a importação/exportação no Pod; ele relatou ausência de som, confirmada pela análise acima.
 
 ## Onde a IA pode ajudar
 

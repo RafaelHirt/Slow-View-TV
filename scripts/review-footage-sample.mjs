@@ -1,11 +1,22 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
 import { startServer } from '../server/index.mjs';
 import { probeMedia } from '../server/footage-media.mjs';
+
+const execute = promisify(execFile);
+async function measureAudio(path) {
+  const { stderr } = await execute('ffmpeg', ['-hide_banner', '-nostats', '-i', path, '-map', '0:a:0', '-af', 'volumedetect', '-f', 'null', '-'], { timeout: 30000 });
+  const number = key => Number([...stderr.matchAll(new RegExp(`${key}:\\s*(-?[\\d.]+)`, 'g'))].at(-1)?.[1]);
+  const sampleCount = number('n_samples'), meanDbfs = number('mean_volume'), peakDbfs = number('max_volume');
+  assert.ok(sampleCount > 0 && Number.isFinite(meanDbfs) && Number.isFinite(peakDbfs), 'A medição precisa analisar amostras de áudio.');
+  return { method: 'FFmpeg volumedetect', sampleCount, meanDbfs, peakDbfs, effectivelySilent: peakDbfs <= -90 };
+}
 
 // Explicit, bounded real-source review. Never connects to the user's Pod or
 // catalogue, publishes footage, starts a GPU, or calls a paid model/service.
@@ -67,13 +78,15 @@ try {
   const probe = await probeMedia(edited.path);
   assert.ok(Math.abs(probe.duration - 20) < .1); assert.equal(probe.frameRate, 25); assert.equal(probe.hasAudio, true);
   assert.equal(probe.width, 1280); assert.equal(probe.height, 720);
-  const report = { checkedAt: new Date().toISOString(), source, original: { ...original, duration: asset.duration },
-    edited: { ...edited, ...probe, processingSeconds: Math.round((Date.now() - started) / 100) / 10 },
-    modifications: ['Trecho contínuo de 2s a 22s', 'Fades de imagem e áudio de até 1,5s', 'Som original: alvo -22 LUFS, pico -2 dBTP', '25 fps preservados; sem IA ou ampliação'],
-    limitations: ['Local informado pela fonte; percurso e trem não identificados', 'Sem mapa, legendas ou aprovação de conforto/áudio', 'Teste em CPU neste ambiente, sem benchmark da GPU RunPod'] };
+  const processingSeconds = Math.round((Date.now() - started) / 100) / 10;
+  const originalAudio = await measureAudio(original.path), editedAudio = await measureAudio(edited.path);
+  const report = { checkedAt: new Date().toISOString(), source, original: { ...original, duration: asset.duration, audioAnalysis: originalAudio },
+    edited: { ...edited, ...probe, processingSeconds, audioAnalysis: editedAudio },
+    modifications: ['Trecho contínuo de 2s a 22s', 'Fades de imagem e áudio de até 1,5s', 'Faixa original processada: alvo -22 LUFS, pico -2 dBTP; não cria sons ausentes', '25 fps preservados; sem IA ou ampliação'],
+    limitations: ['Local informado pela fonte; percurso e trem não identificados', ...(originalAudio.effectivelySilent ? ['Faixa de áudio original efetivamente silenciosa; não é uma amostra de som de trem'] : []), 'Sem mapa, legendas ou aprovação de conforto/áudio', 'Teste em CPU neste ambiente, sem benchmark da GPU RunPod'] };
   await writeFile(join(output, 'relatorio.json'), JSON.stringify(report, null, 2) + '\n');
   await writeFile(join(output, 'creditos.txt'), `${job.title}\nFilmagem: ${source.attribution}\nFonte: ${source.sourceUrl}\nLicença: https://www.pexels.com/license/\nEdição de teste: Slow View TV\n${report.modifications.join('\n')}\n\n${report.limitations.join('\n')}\n`);
-  console.log(`✓ Importação real, áudio original e exportação 20s/720p/25 fps verificados. Arquivos: ${output}`);
+  console.log(`✓ Importação real e exportação 20s/720p/25 fps verificadas. Pico de áudio: original ${originalAudio.peakDbfs} dBFS; edição ${editedAudio.peakDbfs} dBFS. Arquivos: ${output}`);
 } finally {
   await service?.close();
   await rm(directory, { recursive: true, force: true });
