@@ -11,9 +11,10 @@ const runtime = { uid: 1000, nodeVersion: '24.19.0', chromiumPath: '/tmp/test-br
 
 test('RunPod requires a private password, non-root user, explicit origins and a separate data directory', () => {
   const config = resolveRunpodConfig(env, runtime);
-  assert.equal(config.port, 3001); assert.equal(config.host, '0.0.0.0');
+  assert.equal(config.port, 3000); assert.equal(config.host, '0.0.0.0');
   assert.equal(config.corsOrigins, 'https://slow-view-tv.netlify.app');
-  assert.equal(config.appOrigin, 'http://127.0.0.1:3001');
+  assert.equal(config.appOrigin, 'http://127.0.0.1:3000');
+  assert.equal(resolveRunpodConfig({ ...env, PORT: '3010' }, runtime).appOrigin, 'http://127.0.0.1:3010');
   assert.equal(config.noSandbox, false); assert.equal(config.gpuMode, 'native');
   assert.equal(config.gpuBackend, 'auto');
   assert.equal(resolveRunpodConfig({ ...env, CHROMIUM_GPU_BACKEND: 'vulkan' }, runtime).gpuBackend, 'vulkan');

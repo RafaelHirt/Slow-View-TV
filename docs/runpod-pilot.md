@@ -16,6 +16,8 @@ Este procedimento prepara **o protótipo atual**: API, SQLite, fila e renderizad
 | Armazenamento | Network volume, inicialmente 100 GB |
 | Nome do volume | `slow-view-tv-data` |
 | Montagem | `/workspace` |
+| Porta interna da API | `3000` (`PORT` padrão do starter RunPod) |
+| HTTP Service externo | `3001`, ocupado pelo Nginx do template que encaminha para `3000` |
 
 Selecione um data center em que a RTX 4090 esteja disponível. O **Network volume** tem capacidade fixa e continua existindo após excluir o Pod; excluí-lo é uma ação separada. O preço mostrado de US$ 0,07/GB/mês corresponde a aproximadamente US$ 7/mês para 100 GB, além de GPU e eventuais outros itens. Confira o resumo final da contratação. Global volume está indicado como beta na imagem; Volume disk legado é vinculado ao Pod.
 
@@ -26,6 +28,7 @@ Selecione um data center em que a RTX 4090 esteja disponível. O **Network volum
 Nas configurações do template/Pod:
 
 - Exponha a porta **3001 como serviço HTTP**. O proxy do RunPod fornecerá um endereço HTTPS para ela.
+- Preserve o Nginx do template na porta `3001`; ele encaminha as requisições para a API na porta `3000`. Não inicie o Node na `3001`, pois isso causa `EADDRINUSE`. O starter usa `3000` por padrão; a opção `PORT=3000` também pode ser explícita.
 - Defina **`DASHBOARD_PASSWORD` por um Secret do RunPod**, com 12–256 caracteres. Não coloque seu valor no Git, na Netlify, no histórico de comandos ou na conversa.
 - Defina `CORS_ORIGINS=https://slow-view-tv.netlify.app`.
 - Defina `NVIDIA_DRIVER_CAPABILITIES=all` para solicitar também as bibliotecas gráficas do driver. A disponibilidade delas depende do host; CUDA sozinho não comprova WebGL acelerado.
@@ -96,6 +99,8 @@ Quando o perfil Vulkan acima tiver sido validado no mesmo Pod, use em vez disso:
 ```bash
 CHROMIUM_NO_SANDBOX=1 CHROMIUM_GPU_BACKEND=vulkan npm run start:runpod
 ```
+
+Esse comando mantém a API na porta interna `3000`, acessada pelo HTTP Service `3001` do Nginx. Para conferir o encaminhamento em outro terminal do Pod, use `curl --fail --max-time 10 http://127.0.0.1:3001/api/auth/status`: a resposta precisa ser JSON da API; somente uma página HTML com status 200 não comprova o funcionamento. O renderizador continua abrindo a aplicação diretamente em `http://127.0.0.1:3000`, sem passar pelo proxy público.
 
 O comando de início valida senha, permissões, FFmpeg/libx264 e um teste básico de exclusão de escrita entre processos no volume. Para este piloto, SQLite usa journal DELETE e lock EXCLUSIVE, em vez de WAL com memória compartilhada. Mantenha **um único processo/Pod** usando esse banco. O teste não certifica a durabilidade nem o comportamento de falhas de todo sistema de arquivos de rede; valide persistência e faça backup antes de usar dados importantes. Para produção, prefira a API permanente com armazenamento de banco adequado e GPU separada.
 

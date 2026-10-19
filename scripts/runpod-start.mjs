@@ -17,7 +17,9 @@ export function resolveRunpodConfig(env, { nodeVersion = process.versions.node, 
   if (uid === 0) throw new Error('Use npm run start:runpod para executar como o usuário sem privilégios criado pelo instalador.');
   const password = env.DASHBOARD_PASSWORD;
   if (typeof password !== 'string' || password.length < 12 || password.length > 256) throw new Error('Configure DASHBOARD_PASSWORD como Secret do Pod, com 12 a 256 caracteres.');
-  const port = Number(env.PORT || 3001);
+  // The selected RunPod template's Nginx owns public HTTP port 3001 and
+  // forwards it to the application on port 3000.
+  const port = Number(env.PORT || 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT deve ser uma porta entre 1 e 65535.');
   const dataDir = env.SLOWVISTA_DATA_DIR || '/workspace/slow-view-tv-data';
   if (!isAbsolute(dataDir) || within(root, resolve(dataDir)) || ['/', '/workspace', '/tmp'].includes(resolve(dataDir))) throw new Error('Use um diretório absoluto de dados separado do checkout.');
@@ -81,7 +83,7 @@ export async function checkStorageLocking(dataDir) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const service = await startRunpod();
-    console.log(`Slow View TV iniciado. Copie no RunPod o endereço HTTPS do HTTP Service da porta ${service.server.address().port} para configurar a Netlify.`);
+    console.log(`Slow View TV iniciado na porta interna ${service.server.address().port}. Neste piloto, o Nginx encaminha o HTTP Service da porta 3001 para a aplicação na porta 3000. Use o endereço HTTPS do serviço 3001 para configurar a Netlify.`);
     let stopping = false;
     const shutdown = () => { if (stopping) return; stopping = true; service.close().then(() => process.exit(0)).catch(() => process.exit(1)); };
     process.once('SIGINT', shutdown); process.once('SIGTERM', shutdown);
