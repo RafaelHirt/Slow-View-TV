@@ -83,6 +83,8 @@ O resultado informa `backend` solicitado, `sandboxEnabled` e o renderer observad
 
 Referência: [documentação do Chromium sobre GPU no modo headless](https://github.com/chromium/chromium/blob/main/docs/gpu/using-gpu-hardware-in-headless-chrome.md). As opções permitem testar a configuração; ainda é necessário obter e conferir o resultado real no Pod.
 
+Se `vulkaninfo --summary` falhar com `Could not get vkCreateInstance ... libGLX_nvidia.so.0`, confira o carregador genérico `libEGL.so.1`, além da biblioteca de fornecedor `libEGL_nvidia.so.0`. O instalador inclui explicitamente `libegl1`, pois as dependências do navegador podem omiti-lo. Um [relato no projeto NVIDIA para Ubuntu 24.04 e driver 580](https://github.com/NVIDIA/nvidia-container-toolkit/issues/1952) registra essa causa. Em um Pod já preparado, execute `apt-get install -y libegl1` e repita `vulkaninfo` como `slowview`. A instalação desse pacote não comprova que todo erro de driver foi resolvido; confira o resultado real antes de repetir o diagnóstico do navegador.
+
 Depois de conferir o diagnóstico, inicie a API:
 
 ```bash
