@@ -10,6 +10,10 @@ case "$slowview_action" in
   gpu-check) slowview_entry=scripts/runpod-gpu-check.mjs ;;
   *) printf '%s\n' 'Uso: bash scripts/runpod-start.sh [start|gpu-check]' >&2; exit 1 ;;
 esac
+if [[ ! -f node_modules/playwright/package.json || ! -f node_modules/playwright-core/package.json ]]; then
+  printf '%s\n' 'Preparação incompleta: Playwright não está instalado. Execute bash scripts/runpod-setup.sh e aguarde a conclusão antes de iniciar ou verificar a GPU.' >&2
+  exit 1
+fi
 if [[ $(id -u) == 0 ]]; then
   id slowview >/dev/null 2>&1 || { printf '%s\n' 'Execute scripts/runpod-setup.sh primeiro.' >&2; exit 1; }
   # runuser retains the injected application environment, without a password

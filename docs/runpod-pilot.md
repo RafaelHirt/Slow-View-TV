@@ -57,6 +57,10 @@ Cria o usuário `slowview` e os diretórios:
 | `/workspace/slow-view-tv-browser` | Chromium do Playwright |
 | `/workspace/slow-view-tv-cache` | Cache npm |
 
+Antes de instalar as dependências, testa criação, escrita, renomeação, leitura e remoção como `slowview` nesses diretórios. Alguns volumes do RunPod mostram proprietário fixo `0:0` e modo `777`, recusando `chown`; o instalador dispensa a troca de proprietário quando o acesso efetivo funciona. Ele não aplica `chmod 777` nem executa o aplicativo como root. Em sistemas com permissões POSIX normais, ajusta o proprietário somente se necessário e restringe o diretório de dados. Um volume que mantém modo `777` não isola arquivos entre usuários locais: mantenha este piloto em Pod/volume exclusivo do aplicativo.
+
+Se uma versão anterior parou com `chown: Operation not permitted`, atualize o checkout com `git pull --ff-only` (após conferir mudanças locais) e execute `bash scripts/runpod-setup.sh` novamente. O erro posterior de Playwright ausente indica que a instalação foi interrompida; só execute o diagnóstico de GPU depois de aparecer **Preparação concluída**.
+
 Dados e navegador ficam fora do checkout, no volume persistente. O sistema, a instalação global de Node e o usuário Linux podem precisar ser recriados após parar/recriar o contêiner; nesse caso execute a preparação novamente. Ela não inicia o aplicativo automaticamente. `bash scripts/runpod-setup.sh --plan` apenas descreve as ações, sem instalar nada.
 
 ## Verificar gráficos e iniciar

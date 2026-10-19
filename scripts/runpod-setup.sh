@@ -61,9 +61,30 @@ if ! id slowview >/dev/null 2>&1; then
   useradd --create-home --shell /bin/bash slowview
 fi
 [[ $(id -u slowview) != 0 ]] || fail 'O usuário slowview não pode ter UID 0.'
+umask 077
 mkdir -p "$slowview_data" "$slowview_browsers" "$slowview_cache"
-chmod 700 "$slowview_data"
-chown -R slowview:slowview "$slowview_repo" "$slowview_data" "$slowview_browsers" "$slowview_cache"
+slowview_check_access() {
+  runuser -u slowview -- env -u DASHBOARD_PASSWORD -u ADMIN_TOKEN node \
+    "$slowview_repo/scripts/runpod-storage-check.mjs" \
+    "$slowview_repo" "$slowview_data" "$slowview_browsers" "$slowview_cache"
+}
+# The RunPod network mount may expose fixed 0:0/777 metadata and reject chown.
+# If actual non-root I/O already works, no ownership change is necessary.
+if ! slowview_check_access; then
+  printf '%s\n' 'Ajustando o proprietário dos diretórios do aplicativo, quando o volume permitir.'
+  if ! chown -R slowview:slowview "$slowview_repo" "$slowview_data" "$slowview_browsers" "$slowview_cache" 2>/dev/null; then
+    printf '%s\n' 'O volume recusou chown; verificando novamente o acesso efetivo.'
+  fi
+  slowview_check_access || fail 'O usuário slowview não consegue usar os diretórios. Ajuste o acesso do volume antes de continuar; a aplicação não será executada como root.'
+fi
+if [[ $(stat -c '%u' "$slowview_data") == $(id -u slowview) ]]; then
+  runuser -u slowview -- chmod 700 "$slowview_data" || fail 'Não foi possível restringir o diretório de dados.'
+fi
+slowview_data_mode=$(stat -c '%a' "$slowview_data")
+if (( (8#$slowview_data_mode & 0077) != 0 )); then
+  printf '%s\n' 'Este volume não fornece isolamento POSIX privado para os dados. Use o Pod/volume somente para este aplicativo.'
+fi
+printf '%s\n' 'Leitura, escrita, renomeação e remoção verificadas como slowview.'
 export PLAYWRIGHT_BROWSERS_PATH="$slowview_browsers"
 cd "$slowview_repo"
 # Installation/build processes do not need the dashboard's secret.
