@@ -209,21 +209,22 @@ test('additive migration preserves legacy completed video records and uses their
   assert.equal(reopened.db.prepare('PRAGMA table_info(jobs)').all().filter((column) => column.name === 'resolution').length, 1);
 });
 
-test('render workers receive native 4K dimensions and the entire journey duration', async (t) => {
+test('render workers receive native 4K dimensions, the entire journey and the selected graphics profile', async (t) => {
   let captured;
   const render = async (input) => {
     captured = input;
     input.onProgress(0.5);
     await writeFile(input.outputPath, 'worker-4k-contract');
   };
-  const { api } = await setup(t, { enableWorker: true, render });
+  const { api } = await setup(t, { enableWorker: true, render, gpuMode: 'native', gpuBackend: 'vulkan' });
   const { variant } = await createRouteVariant(api);
   const response = await api('/api/jobs', { method: 'POST', body: { variantId: variant.id, resolution: '2160p' } });
   const job = await waitJob(api, response.body.id, (result) => result.status === 'completed');
   assert.equal(captured.journeySeconds, 7200);
+  assert.equal(captured.gpuMode, 'native');
+  assert.equal(captured.gpuBackend, 'vulkan');
   assert.equal(captured.job.outputSeconds, 7200);
   assert.deepEqual([captured.job.width, captured.job.height, captured.job.fps], [3840, 2160, 24]);
-  assert.equal(captured.gpuMode, 'software');
   assert.equal(job.outputSeconds, 7200);
 });
 

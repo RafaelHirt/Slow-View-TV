@@ -7,6 +7,7 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { startServer } from '../server/index.mjs';
+import { buildChromiumArgs } from '../server/chromium-options.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const within = (parent, child) => { const rel = relative(parent, child); return !rel || (!rel.startsWith('..') && !isAbsolute(rel)); };
@@ -27,14 +28,15 @@ export function resolveRunpodConfig(env, { nodeVersion = process.versions.node, 
     if (url.protocol !== 'https:' || url.origin !== origin.trim()) throw new Error('CORS_ORIGINS deve conter origens HTTPS exatas, sem caminhos ou barra final.');
   }
   const gpuMode = env.CHROMIUM_GPU_MODE || 'native';
-  if (!['native', 'software'].includes(gpuMode)) throw new Error('CHROMIUM_GPU_MODE deve ser native ou software.');
+  const gpuBackend = env.CHROMIUM_GPU_BACKEND || 'auto';
+  buildChromiumArgs({ gpuMode, gpuBackend });
   if (env.CHROMIUM_NO_SANDBOX && !['0', '1'].includes(env.CHROMIUM_NO_SANDBOX)) throw new Error('CHROMIUM_NO_SANDBOX deve ser 0 ou 1 quando definido explicitamente.');
   return {
     dataDir: resolve(dataDir), port, host: '0.0.0.0', appOrigin: `http://127.0.0.1:${port}`,
     corsOrigins, dashboardPassword: password, adminToken: '',
     chromiumExecutable: env.CHROMIUM_EXECUTABLE || chromiumPath,
     ffmpegExecutable: env.FFMPEG_EXECUTABLE || 'ffmpeg',
-    noSandbox: env.CHROMIUM_NO_SANDBOX === '1', gpuMode,
+    noSandbox: env.CHROMIUM_NO_SANDBOX === '1', gpuMode, gpuBackend,
     // Rollback journal avoids WAL's shared-memory requirement on a network
     // volume. One process holds the database lock. The actual RunPod mount's
     // locking and crash behavior must still be verified before real data use.

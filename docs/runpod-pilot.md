@@ -73,10 +73,26 @@ O wrapper executa o programa como `slowview`, sem colocar a senha em argumentos 
 
 O diagnóstico inspeciona a identidade WebGL do navegador. `nvidiaRenderer: true` indica que o contexto observado usa NVIDIA; não mede velocidade nem muda o encoder. `softwareRenderer: true` indica uma implementação como SwiftShader. O modo pedido `native` sozinho não demonstra aceleração. A opção `--require-nvidia` retorna código 2 quando a NVIDIA não é identificada.
 
+O modo `native` solicita `--enable-gpu`, necessário para a descoberta de hardware no Chromium sem interface. Em Linux sem tela X11, pode ser necessário selecionar ANGLE/Vulkan explicitamente. Teste esse perfil no Pod isolado em que a falha de sandbox já foi observada:
+
+```bash
+CHROMIUM_NO_SANDBOX=1 CHROMIUM_GPU_BACKEND=vulkan npm run gpu:check:runpod -- --require-nvidia
+```
+
+O resultado informa `backend` solicitado, `sandboxEnabled` e o renderer observado. Se esse perfil identificar NVIDIA, mantenha **o mesmo `CHROMIUM_GPU_BACKEND=vulkan`** na inicialização da API, junto da decisão explícita sobre o sandbox. Teste e renderizador compartilham as opções gráficas. Se Vulkan continuar sem hardware, confira as bibliotecas/ICD do driver; `nvidia-smi` acessível como `slowview` comprova acesso à placa, mas não a presença da pilha gráfica. Não reinstale o driver do host dentro do contêiner.
+
+Referência: [documentação do Chromium sobre GPU no modo headless](https://github.com/chromium/chromium/blob/main/docs/gpu/using-gpu-hardware-in-headless-chrome.md). As opções permitem testar a configuração; ainda é necessário obter e conferir o resultado real no Pod.
+
 Depois de conferir o diagnóstico, inicie a API:
 
 ```bash
 npm run start:runpod
+```
+
+Quando o perfil Vulkan acima tiver sido validado no mesmo Pod, use em vez disso:
+
+```bash
+CHROMIUM_NO_SANDBOX=1 CHROMIUM_GPU_BACKEND=vulkan npm run start:runpod
 ```
 
 O comando de início valida senha, permissões, FFmpeg/libx264 e um teste básico de exclusão de escrita entre processos no volume. Para este piloto, SQLite usa journal DELETE e lock EXCLUSIVE, em vez de WAL com memória compartilhada. Mantenha **um único processo/Pod** usando esse banco. O teste não certifica a durabilidade nem o comportamento de falhas de todo sistema de arquivos de rede; valide persistência e faça backup antes de usar dados importantes. Para produção, prefira a API permanente com armazenamento de banco adequado e GPU separada.

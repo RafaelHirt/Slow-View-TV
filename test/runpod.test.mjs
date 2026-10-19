@@ -15,12 +15,15 @@ test('RunPod requires a private password, non-root user, explicit origins and a 
   assert.equal(config.corsOrigins, 'https://slow-view-tv.netlify.app');
   assert.equal(config.appOrigin, 'http://127.0.0.1:3001');
   assert.equal(config.noSandbox, false); assert.equal(config.gpuMode, 'native');
+  assert.equal(config.gpuBackend, 'auto');
+  assert.equal(resolveRunpodConfig({ ...env, CHROMIUM_GPU_BACKEND: 'vulkan' }, runtime).gpuBackend, 'vulkan');
   assert.equal(config.sqliteJournalMode, 'DELETE'); assert.equal(config.sqliteLockingMode, 'EXCLUSIVE');
   assert.equal(config.chromiumExecutable, runtime.chromiumPath);
   for (const patch of [{ DASHBOARD_PASSWORD: '' }, { DASHBOARD_PASSWORD: 'short' }, { PORT: '0' }, { PORT: '3001/path' },
     { SLOWVISTA_DATA_DIR: '.' }, { SLOWVISTA_DATA_DIR: '/' }, { CORS_ORIGINS: '*' },
     { CORS_ORIGINS: 'http://example.com' }, { CORS_ORIGINS: 'https://example.com/path' },
-    { CHROMIUM_GPU_MODE: 'cuda' }, { CHROMIUM_NO_SANDBOX: 'maybe' }]) {
+    { CHROMIUM_GPU_MODE: 'cuda' }, { CHROMIUM_GPU_BACKEND: 'other' },
+    { CHROMIUM_GPU_MODE: 'software', CHROMIUM_GPU_BACKEND: 'vulkan' }, { CHROMIUM_NO_SANDBOX: 'maybe' }]) {
     assert.throws(() => resolveRunpodConfig({ ...env, ...patch }, runtime));
   }
   assert.throws(() => resolveRunpodConfig(env, { ...runtime, uid: 0 }), /sem privilégios/);

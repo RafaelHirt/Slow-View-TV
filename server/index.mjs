@@ -222,6 +222,7 @@ export async function startServer(options = {}) {
     chromiumExecutable: options.chromiumExecutable,
     noSandbox: options.noSandbox ?? process.env.CHROMIUM_NO_SANDBOX === '1',
     gpuMode: options.gpuMode ?? process.env.CHROMIUM_GPU_MODE ?? 'software',
+    gpuBackend: options.gpuBackend ?? process.env.CHROMIUM_GPU_BACKEND ?? 'auto',
   });
   return {
     app, server, db, dataDir, baseUrl, appOrigin,

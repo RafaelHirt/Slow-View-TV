@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { jobFromRow } from './database.mjs';
 import { renderVideo } from './renderer.mjs';
 
-export function createQueue({ db, dataDir, appOrigin, workerToken, render = renderVideo, chromiumExecutable, noSandbox = false, gpuMode = 'software' }) {
+export function createQueue({ db, dataDir, appOrigin, workerToken, render = renderVideo, chromiumExecutable, noSandbox = false, gpuMode = 'software', gpuBackend = 'auto' }) {
   let running = false;
   let stopped = false;
   let current = null;
@@ -28,7 +28,7 @@ export function createQueue({ db, dataDir, appOrigin, workerToken, render = rend
           if (!variant) throw new Error('A variação desta exportação não está mais disponível.');
           await render({ job: jobFromRow(row), outputPath: temporaryPath, appOrigin, workerToken,
             journeySeconds: variant.duration_minutes * 60,
-            signal: controller.signal, chromiumExecutable, noSandbox, gpuMode,
+            signal: controller.signal, chromiumExecutable, noSandbox, gpuMode, gpuBackend,
             onProgress: (progress) => {
               if (Number.isFinite(progress)) db.prepare("UPDATE jobs SET progress = ? WHERE id = ? AND status = 'rendering'").run(Math.max(0, Math.min(0.99, progress)), row.id);
             },

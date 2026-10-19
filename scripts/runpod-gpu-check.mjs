@@ -1,9 +1,10 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { buildChromiumArgs } from '../server/chromium-options.mjs';
 
-export async function probeGraphics({ chromiumExecutable, noSandbox = false, gpuMode = 'native' } = {}) {
-  if (!['native', 'software'].includes(gpuMode)) throw new Error('CHROMIUM_GPU_MODE deve ser native ou software.');
+export async function probeGraphics({ chromiumExecutable, noSandbox = false, gpuMode = 'native', gpuBackend = 'auto' } = {}) {
+  const browserArgs = buildChromiumArgs({ gpuMode, gpuBackend });
   if (typeof noSandbox !== 'boolean') throw new Error('noSandbox deve ser uma opção booleana explícita.');
   let browser;
   try {
@@ -11,8 +12,7 @@ export async function probeGraphics({ chromiumExecutable, noSandbox = false, gpu
       executablePath: chromiumExecutable || process.env.CHROMIUM_EXECUTABLE || chromium.executablePath(),
       headless: true,
       chromiumSandbox: !noSandbox,
-      args: ['--disable-dev-shm-usage', ...(gpuMode === 'software'
-        ? ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'] : [])],
+      args: browserArgs,
       timeout: 30000,
     });
     const context = await browser.newContext({ offline: true, viewport: { width: 64, height: 64 } });
@@ -39,7 +39,7 @@ export async function probeGraphics({ chromiumExecutable, noSandbox = false, gpu
     return {
       ...graphics, softwareRenderer,
       nvidiaRenderer: graphics.webglAvailable && !software && /\bnvidia\b/i.test(identity),
-      mode: gpuMode,
+      mode: gpuMode, backend: gpuBackend, sandboxEnabled: !noSandbox,
       note: 'O encoder atual é libx264 na CPU. Identificar NVIDIA no WebGL não comprova desempenho de renderização nem codificação por GPU.',
     };
   } finally { await browser?.close(); }
@@ -57,17 +57,20 @@ async function main() {
       chromiumExecutable: process.env.CHROMIUM_EXECUTABLE,
       noSandbox: process.env.CHROMIUM_NO_SANDBOX === '1',
       gpuMode: process.env.CHROMIUM_GPU_MODE || 'native',
+      gpuBackend: process.env.CHROMIUM_GPU_BACKEND || 'auto',
     });
     console.log(JSON.stringify(report, null, 2));
     if (args.includes('--require-nvidia') && !report.nvidiaRenderer) process.exitCode = 2;
   } catch (error) {
     // Browser launch errors can include a verbose process environment or
     // command transcript. Keep CLI output limited to a safe diagnostic.
-    const invalidMode = !['native', 'software'].includes(process.env.CHROMIUM_GPU_MODE || 'native');
-    console.error(JSON.stringify({ error: invalidMode
-      ? 'CHROMIUM_GPU_MODE deve ser native ou software.'
-      : 'Não foi possível verificar o WebGL2 no Chromium. Confira CHROMIUM_EXECUTABLE, as dependências do navegador e o sandbox. O sandbox permanece ativo; CHROMIUM_NO_SANDBOX=1 exige uma decisão explícita para um ambiente isolado.',
-      code: invalidMode ? 'invalid_gpu_mode' : 'graphics_probe_failed',
+    let invalidConfig;
+    try { buildChromiumArgs({ gpuMode: process.env.CHROMIUM_GPU_MODE || 'native', gpuBackend: process.env.CHROMIUM_GPU_BACKEND || 'auto' }); }
+    catch (validationError) { invalidConfig = validationError; }
+    console.error(JSON.stringify({ error: invalidConfig?.message
+      || 'Não foi possível verificar o WebGL2 no Chromium. Confira CHROMIUM_EXECUTABLE, as bibliotecas gráficas e o suporte ao sandbox do contêiner.',
+      code: invalidConfig ? 'invalid_gpu_config' : 'graphics_probe_failed',
+      sandboxEnabled: process.env.CHROMIUM_NO_SANDBOX !== '1',
     }));
     process.exitCode = 1;
   }

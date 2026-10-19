@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { VIDEO_FORMATS } from './validation.mjs';
+import { buildChromiumArgs } from './chromium-options.mjs';
 
 function ensureNotAborted(signal) {
   if (signal.aborted) throw new Error('Renderização cancelada.');
@@ -15,12 +16,12 @@ function bounded(promise, milliseconds, description) {
   ]).finally(() => clearTimeout(timeout));
 }
 
-export async function renderVideo({ job, journeySeconds = job.outputSeconds, outputPath, appOrigin, workerToken, signal, onProgress, chromiumExecutable, noSandbox = false, gpuMode = 'software' }) {
+export async function renderVideo({ job, journeySeconds = job.outputSeconds, outputPath, appOrigin, workerToken, signal, onProgress, chromiumExecutable, noSandbox = false, gpuMode = 'software', gpuBackend = 'auto' }) {
   const format = VIDEO_FORMATS[job.resolution ?? '720p'];
   if (!format || (job.width !== undefined && job.width !== format.width) || (job.height !== undefined && job.height !== format.height) || (job.fps !== undefined && job.fps !== format.fps)) {
     throw new Error('As dimensões da exportação não correspondem à resolução selecionada.');
   }
-  if (!['software', 'native'].includes(gpuMode)) throw new Error('CHROMIUM_GPU_MODE deve ser software ou native.');
+  const browserArgs = buildChromiumArgs({ gpuMode, gpuBackend });
   const { width, height, fps } = format;
   const origin = new URL(appOrigin);
   if (!['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname) || !['http:', 'https:'].includes(origin.protocol)) {
@@ -39,9 +40,9 @@ export async function renderVideo({ job, journeySeconds = job.outputSeconds, out
       executablePath: chromiumExecutable || process.env.CHROMIUM_EXECUTABLE || '/usr/bin/chromium',
       headless: true,
       chromiumSandbox: !noSandbox,
-      // "native" lets Chromium choose the available driver. It does not imply
-      // a physical GPU exists, nor does it change the output resolution.
-      args: ['--disable-dev-shm-usage', ...(gpuMode === 'software' ? ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'] : [])],
+      // Share graphics options with the standalone GPU probe.
+      // Requesting native hardware does not establish its actual availability.
+      args: browserArgs,
     });
     ensureNotAborted(signal);
     const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
