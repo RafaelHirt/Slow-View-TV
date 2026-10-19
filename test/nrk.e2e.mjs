@@ -16,10 +16,11 @@ const fixture = join(directory, 'technical-fixture-not-real-nrk.mp4');
 await execute('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=darkseagreen:s=1920x1080:r=25:d=6', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=6', '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '2', '-c:a', 'aac', '-movflags', '+faststart', '-shortest', fixture]);
 let attempts = 0;
 const service = await startServer({ port: 0, dataDir: join(directory, 'data'), dashboardPassword: 'senha-tecnica-isolada-do-navegador', enableWorker: false,
-  nrkIngest: { enabled: true, freeBytes: async () => 12 * 1024 ** 3, downloadImpl: async ({ directory: staging, signal, onProgress }) => {
+  nrkIngest: { enabled: true, freeBytes: async () => 12 * 1024 ** 3, downloadImpl: async ({ directory: staging, signal, onProgress, onDiagnostic }) => {
     attempts++; const path = join(staging, FLAMSBANEN.filename);
     if (attempts === 1) {
       await writeFile(path, 'isolated technical partial file'); onProgress({ completed: 1000000000, total: FLAMSBANEN.bytes });
+      onDiagnostic({ exitCode: null, signal: null, elapsedSeconds: 2, completed: 1000000000, maxConnections: 2, maxSeeders: null, trackerFailures: 0, errorCodes: [], reason: null });
       await new Promise((_, reject) => { const abort = () => reject(signal.reason); signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort(); });
     } else { await copyFile(fixture, path); await truncate(path, FLAMSBANEN.bytes); return path; }
   } } });
@@ -35,6 +36,8 @@ try {
   const card = page.getByRole('article', { name: 'Flåmsbanen', exact: true });
   await card.getByRole('button', { name: 'Baixar viagem no RunPod' }).click();
   await card.getByText(/26% · 1,00 de 3,76 GB/).waitFor();
+  await card.getByText('Diagnóstico da tentativa', { exact: true }).click();
+  await card.getByText('Maior número de conexões', { exact: true }).locator('..').getByText('2', { exact: true }).waitFor();
   assert.equal(attempts, 1);
   await page.screenshot({ path: join(artifacts, 'nrk-download-technical-test.png'), fullPage: true });
   await card.getByRole('button', { name: 'Pausar download' }).click();

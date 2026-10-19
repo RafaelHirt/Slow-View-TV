@@ -67,7 +67,7 @@ export function TrainLibrary({ onLibrary, onOpenAsset }: { onLibrary: () => void
     </section>
     <label className="ft-train-search"><span><Search size={15} />Buscar percurso, cidade ou trem</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Ex.: Trondheim, Flåm ou Bergen" /></label>
     <div className="ft-train-grid">{visible.map(journey => <article className="ft-panel ft-train-card" key={journey.id} aria-labelledby={`journey-${journey.id}`}>
-      <div className="ft-train-card-top"><span><MapPin size={14} />{journey.country}</span><span className="ft-status">{journey.id === 'flamsbanen' && download ? importLabels[download.status] : 'Em preparação'}</span></div>
+      <div className="ft-train-card-top"><span><MapPin size={14} />{journey.country}</span><span className="ft-status">{journey.id === 'flamsbanen' && download ? download.status === 'downloading' && download.completed === 0 ? 'Aguardando transferência' : importLabels[download.status] : 'Em preparação'}</span></div>
       <h2 id={`journey-${journey.id}`}>{journey.name}</h2>
       <p className="ft-train-route"><span>{journey.origin}</span><ArrowRight size={17} aria-label="até" /><span>{journey.destination}</span></p>
       <p>{journey.description}</p>
@@ -82,6 +82,14 @@ export function TrainLibrary({ onLibrary, onOpenAsset }: { onLibrary: () => void
           {nrk && !nrk.available && <p>Atualize e ative a importação no RunPod para começar.</p>}
         </>}
         {(error || loadError || download?.error) && <p className="ft-error" role="alert">{error || loadError || download?.error}</p>}
+        {download?.diagnostics && <details className="ft-download-diagnostics"><summary>Diagnóstico da tentativa</summary><dl>
+          <div><dt>Duração registrada</dt><dd>{download.diagnostics.elapsedSeconds}s</dd></div>
+          <div><dt>Maior número de conexões</dt><dd>{download.diagnostics.maxConnections ?? 'Não informado pelo programa'}</dd></div>
+          <div><dt>Fontes completas conectadas</dt><dd>{download.diagnostics.maxSeeders ?? 'Não informado pelo programa'}</dd></div>
+          <div><dt>Falhas de rastreador registradas</dt><dd>{download.diagnostics.trackerFailures}</dd></div>
+          <div><dt>Código de saída</dt><dd>{download.diagnostics.exitCode ?? (download.diagnostics.signal || 'Ainda em execução')}</dd></div>
+          {!!download.diagnostics.errorCodes.length && <div><dt>Códigos de erro registrados</dt><dd>{download.diagnostics.errorCodes.join(', ')}</dd></div>}
+        </dl><p>Esses dados ajudam a distinguir falha de conexão, armazenamento e transferência incompleta. Zero conexões não comprova que o arquivo deixou de existir.</p></details>}
         <p>Conferir o som e a imagem faz parte da preparação. A edição mantém créditos NRK e licença CC BY-SA.</p>
       </div>}
       <a className="ft-button" href={journey.sourceUrl} target="_blank" rel="noreferrer">Ver publicação da viagem <ArrowUpRight size={15} /></a>

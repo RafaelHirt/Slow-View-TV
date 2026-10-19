@@ -22,12 +22,84 @@ export const FLAMSBANEN = Object.freeze({
 });
 
 export function parseAriaProgress(line) {
-  const match = line.match(/(\d+)B\/(\d+)B\((\d+)%\)/);
+  const match = line.match(/(\d+)B\/(\d+)B\s*\((\d+)%\)/);
   if (!match) return null;
   return { completed: Number(match[1]), total: Number(match[2]) };
 }
 
-export async function downloadNrkTorrent({ directory, signal, onProgress, fetchImpl, binary = 'aria2c' }) {
+export const ariaDownloadArgs = (directory, torrent) => [
+  '--no-conf=true', '--enable-color=false', '--human-readable=false', '--summary-interval=2',
+  '--console-log-level=warn', '--download-result=hide', '--file-allocation=none',
+  '--continue=true', '--check-integrity=true', '--auto-file-renaming=false',
+  '--seed-time=0', '--bt-stop-timeout=180', '--stop=3600', '--bt-max-peers=30',
+  '--max-overall-download-limit=20M', '--max-overall-upload-limit=512K', '--disk-cache=8M',
+  `--dir=${directory}`, torrent,
+];
+
+function ariaFailure(diagnostic) {
+  const code = diagnostic.exitCode;
+  if (code === 9) return ['storage', 'O aria2 informou falta de espaço no volume. Libere espaço antes de retomar; as partes recebidas foram preservadas.'];
+  if ([13, 14, 15, 16, 17, 18].includes(code)) return ['storage', 'O aria2 não conseguiu abrir, criar ou gravar o arquivo no volume. Confira o acesso ao armazenamento; nenhum arquivo foi apagado.'];
+  if (code === 28) return ['invalid_options', 'O aria2 rejeitou as opções de execução. Confira a versão e a instalação do programa no servidor.'];
+  if ([25, 26].includes(code)) return ['metadata', 'O aria2 não conseguiu interpretar os metadados do torrent. A fonte e o programa precisam ser conferidos.'];
+  if (code === 19) return ['network', 'O aria2 informou uma falha de resolução de endereço (DNS). Confira a conexão do servidor.'];
+  if (diagnostic.signal) return ['interrupted', `O processo de download foi encerrado (${diagnostic.signal}). As partes recebidas foram preservadas.`];
+  if (diagnostic.elapsedSeconds >= 170 && diagnostic.completed === 0) return ['no_transfer', `A tentativa terminou após ${diagnostic.elapsedSeconds}s sem registrar dados recebidos. Não foi possível confirmar se a fonte está indisponível ou se a conexão falhou. Este torrent depende dos rastreadores publicados pela NRK.`];
+  if ([2, 5, 6].includes(code)) return ['network', 'O aria2 encerrou a tentativa por tempo de espera, conexão ou velocidade insuficiente. A causa exata precisa ser conferida no diagnóstico.'];
+  if (code === 7) return ['incomplete', 'A transferência ficou incompleta. Confira as conexões e as falhas registradas no diagnóstico antes de retomar.'];
+  return ['unknown', 'O aria2 encerrou a transferência sem concluir o arquivo. O diagnóstico registra o código de saída; isso não confirma ausência de fontes.'];
+}
+
+export async function runAriaDownload({ directory, torrent, signal, onProgress = () => {}, onDiagnostic = () => {}, binary = 'aria2c', now = Date.now }) {
+  signal.throwIfAborted();
+  const started = now();
+  const diagnostic = { exitCode: null, signal: null, elapsedSeconds: 0, completed: 0, maxConnections: null, maxSeeders: null, trackerFailures: 0, errorCodes: [], reason: null };
+  const publish = () => { diagnostic.elapsedSeconds = Math.floor((now() - started) / 1000); onDiagnostic({ ...diagnostic, errorCodes: [...diagnostic.errorCodes] }); };
+  return new Promise((resolve, reject) => {
+    const child = spawn(binary, ariaDownloadArgs(directory, torrent), { cwd: directory, stdio: ['ignore', 'pipe', 'pipe'] });
+    let killTimer, spawnError;
+    const abort = () => { child.kill('SIGINT'); killTimer = setTimeout(() => child.kill('SIGKILL'), 5000); };
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) abort();
+    function inspect(line) {
+      const progress = parseAriaProgress(line);
+      if (progress) { diagnostic.completed = progress.completed; onProgress(progress); }
+      const connections = line.match(/\bCN:(\d+)/), seeders = line.match(/\bSD:(\d+)/);
+      if (connections) diagnostic.maxConnections = Math.max(diagnostic.maxConnections || 0, Number(connections[1]));
+      if (seeders) diagnostic.maxSeeders = Math.max(diagnostic.maxSeeders || 0, Number(seeders[1]));
+      if (/tracker.*(?:fail|error|exception)|(?:fail|error|exception).*tracker/i.test(line)) diagnostic.trackerFailures = Math.min(1000000, diagnostic.trackerFailures + 1);
+      for (const match of line.matchAll(/\berrorCode=(\d{1,3})\b/g)) if (!diagnostic.errorCodes.includes(Number(match[1]))) diagnostic.errorCodes.push(Number(match[1]));
+      if (progress || connections || seeders || /errorCode=|tracker/i.test(line)) publish();
+    }
+    // Inspect both streams, but retain only numeric counters/codes. Raw process
+    // output can contain peer IPs, paths or proxy credentials and is discarded.
+    const buffers = ['', ''];
+    [child.stdout, child.stderr].forEach((stream, index) => stream.on('data', chunk => {
+      const lines = (buffers[index] + chunk).split(/[\r\n]/); buffers[index] = lines.pop().slice(-4000);
+      for (const line of lines) inspect(line);
+    }));
+    child.once('error', error => { spawnError = error; });
+    child.once('close', (code, terminationSignal) => {
+      signal.removeEventListener('abort', abort); clearTimeout(killTimer);
+      diagnostic.elapsedSeconds = Math.floor((now() - started) / 1000);
+      for (const tail of buffers) if (tail) inspect(tail);
+      diagnostic.exitCode = Number.isInteger(code) ? code : null;
+      diagnostic.signal = typeof terminationSignal === 'string' && /^SIG[A-Z0-9]+$/.test(terminationSignal) ? terminationSignal : null;
+      if (signal.aborted) { diagnostic.reason = 'paused'; publish(); reject(signal.reason); return; }
+      if (spawnError?.code === 'ENOENT') {
+        diagnostic.reason = 'missing_program'; publish();
+        const error = new HttpError(503, 'Instale aria2 no RunPod para baixar a viagem.'); error.downloadDiagnostic = { ...diagnostic }; reject(error); return;
+      }
+      if (code !== 0 || spawnError) {
+        const [reason, message] = ariaFailure(diagnostic); diagnostic.reason = reason; publish();
+        const error = new HttpError(502, `${message}${diagnostic.exitCode === null ? '' : ` Código de saída: ${diagnostic.exitCode}.`}`);
+        error.downloadDiagnostic = { ...diagnostic, errorCodes: [...diagnostic.errorCodes] }; reject(error);
+      } else { publish(); resolve({ ...diagnostic }); }
+    });
+  });
+}
+
+export async function downloadNrkTorrent({ directory, signal, onProgress, onDiagnostic, fetchImpl, binary = 'aria2c' }) {
   const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
   const dispatcher = !fetchImpl && proxy ? new ProxyAgent(proxy) : null;
   try {
@@ -54,35 +126,7 @@ export async function downloadNrkTorrent({ directory, signal, onProgress, fetchI
     signal.throwIfAborted();
     const torrent = join(directory, 'source.torrent');
     await writeFile(torrent, bytes, { mode: 0o600 });
-    await new Promise((resolve, reject) => {
-      const child = spawn(binary, [
-        '--no-conf=true', '--enable-color=false', '--human-readable=false', '--summary-interval=2',
-        '--console-log-level=warn', '--download-result=hide', '--file-allocation=none',
-        '--continue=true', '--check-integrity=true', '--auto-file-renaming=false',
-        '--seed-time=0', '--bt-stop-timeout=180', '--stop=3600', '--bt-max-peers=30',
-        '--max-overall-download-limit=20M', '--max-overall-upload-limit=512K', '--disk-cache=8M',
-        `--dir=${directory}`, torrent,
-      ], { cwd: directory, stdio: ['ignore', 'pipe', 'pipe'] });
-      let buffer = '', killTimer, spawnError;
-      const abort = () => { child.kill('SIGINT'); killTimer = setTimeout(() => child.kill('SIGKILL'), 5000); };
-      signal.addEventListener('abort', abort, { once: true });
-      if (signal.aborted) abort();
-      child.stdout.on('data', chunk => {
-        buffer += chunk;
-        const lines = buffer.split(/[\r\n]/); buffer = lines.pop().slice(-4000);
-        for (const line of lines) { const progress = parseAriaProgress(line); if (progress) onProgress(progress); }
-      });
-      // Never return peer addresses, system paths or arbitrary subprocess logs.
-      child.stderr.resume();
-      child.once('error', error => { spawnError = error; });
-      child.once('close', code => {
-        signal.removeEventListener('abort', abort); clearTimeout(killTimer);
-        if (signal.aborted) reject(signal.reason);
-        else if (spawnError?.code === 'ENOENT') reject(new HttpError(503, 'Instale aria2 no RunPod para baixar a viagem.'));
-        else if (code !== 0) reject(new HttpError(502, 'O torrent não concluiu a transferência. Pode não haver fontes ativas; os dados parciais foram preservados para retomar.'));
-        else resolve();
-      });
-    });
+    await runAriaDownload({ directory, torrent, signal, onProgress, onDiagnostic, binary });
     // A stopped torrent can leave a full-sized sparse file. Length alone is not
     // proof of completion: aria2 must also have removed its resume control file.
     const path = join(directory, FLAMSBANEN.filename);
@@ -103,6 +147,7 @@ export async function createNrkIngest({ db, directory, newAsset, getAsset, publi
     completed INTEGER NOT NULL DEFAULT 0, error TEXT, updated_at TEXT NOT NULL
   );
   UPDATE footage_downloads SET status='paused',error='O servidor reiniciou. Retome para conferir e continuar o download.' WHERE status IN ('downloading','verifying');`);
+  if (!db.prepare('PRAGMA table_info(footage_downloads)').all().some(column => column.name === 'diagnostics')) db.exec('ALTER TABLE footage_downloads ADD COLUMN diagnostics TEXT');
   let active = null, closed = false;
   const row = () => db.prepare('SELECT * FROM footage_downloads WHERE source_id=?').get(FLAMSBANEN.id);
   const update = (status, error = null) => db.prepare('UPDATE footage_downloads SET status=?,error=?,updated_at=? WHERE source_id=?').run(status, error, new Date().toISOString(), FLAMSBANEN.id);
@@ -110,6 +155,7 @@ export async function createNrkIngest({ db, directory, newAsset, getAsset, publi
     const current = row(), asset = current ? getAsset(current.asset_id) : null;
     return { enabled, available, source: { id: FLAMSBANEN.id, title: FLAMSBANEN.title, bytes: FLAMSBANEN.bytes, licenseUrl: FLAMSBANEN.licenseUrl },
       download: current ? { status: current.status, completed: current.completed, total: FLAMSBANEN.bytes, error: current.error,
+        diagnostics: current.diagnostics ? JSON.parse(current.diagnostics) : null,
         assetId: asset?.id || null, ...(current.status === 'ready' && asset ? { asset } : {}) } : null };
   }
   return {
@@ -138,6 +184,7 @@ export async function createNrkIngest({ db, directory, newAsset, getAsset, publi
           current = row();
         } else db.prepare("UPDATE footage_assets SET status='importing',error=NULL WHERE id=?").run(current.asset_id);
         update('downloading');
+        db.prepare('UPDATE footage_downloads SET diagnostics=NULL WHERE source_id=?').run(FLAMSBANEN.id);
         const assetId = current.asset_id;
         active.task = Promise.resolve().then(async () => {
           const finalPath = join(directory, `${assetId}.mp4`);
@@ -145,6 +192,7 @@ export async function createNrkIngest({ db, directory, newAsset, getAsset, publi
           // registration from that verified file without downloading it again.
           const existing = await stat(finalPath).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
           const sourcePath = existing?.size === FLAMSBANEN.bytes ? finalPath : await download({ directory: staging, signal: controller.signal,
+            onDiagnostic: value => db.prepare('UPDATE footage_downloads SET diagnostics=? WHERE source_id=?').run(JSON.stringify(value), FLAMSBANEN.id),
             onProgress: progress => {
               if (Number.isSafeInteger(progress.completed) && progress.completed >= 0 && progress.completed <= FLAMSBANEN.bytes && progress.total === FLAMSBANEN.bytes) db.prepare('UPDATE footage_downloads SET completed=? WHERE source_id=?').run(progress.completed, FLAMSBANEN.id);
             } });

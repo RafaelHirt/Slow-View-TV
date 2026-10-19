@@ -22,6 +22,7 @@
     "test:access": "node test/access.e2e.mjs",
     "test:footage": "node test/footage.e2e.mjs",
     "test:nrk": "node test/nrk.e2e.mjs",
+    "check:nrk-sources": "node scripts/check-nrk-sources.mjs",
     "review:footage": "node scripts/review-footage-sample.mjs",
     "test:planning": "node test/planning.e2e.mjs",
     "test:atlas": "node test/atlas.e2e.mjs",

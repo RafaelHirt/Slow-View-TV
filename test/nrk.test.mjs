@@ -6,8 +6,9 @@ import { copyFile, mkdtemp, readFile, rm, stat, truncate, writeFile } from 'node
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
+import { DatabaseSync } from 'node:sqlite';
 import { startServer } from '../server/index.mjs';
-import { FLAMSBANEN, downloadNrkTorrent, parseAriaProgress } from '../server/nrk-ingest.mjs';
+import { FLAMSBANEN, downloadNrkTorrent, parseAriaProgress, runAriaDownload } from '../server/nrk-ingest.mjs';
 import { validateMediaMetadata, validateFootageEdit } from '../server/footage-media.mjs';
 
 const execute = promisify(execFile);
@@ -49,6 +50,49 @@ test('official torrent changes are rejected before any peer connection', async t
   assert.equal(parseAriaProgress('No data received yet'), null);
 });
 
+test('subprocess diagnosis distinguishes storage and network failures without returning raw logs', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'slowview-aria-diagnostics-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  for (const [code, reason] of [[9, 'storage'], [19, 'network'], [28, 'invalid_options'], [7, 'incomplete']]) {
+    const binary = join(directory, `technical-exit-${code}`);
+    await writeFile(binary, `#!${process.execPath}\nprocess.stdout.write('[#abc 0B/3763728590B (0%) CN:2 SD:0]\\r');\nprocess.stderr.write('tracker failure http://user:private-proxy-password@example.invalid/path errorCode=19\\n');\nprocess.exit(${code});\n`, { mode: 0o700 });
+    const updates = []; let failure;
+    try { await runAriaDownload({ directory, torrent: join(directory, 'unused.torrent'), signal: new AbortController().signal, binary, onDiagnostic: value => updates.push(value) }); }
+    catch (error) { failure = error; }
+    assert.equal(failure.downloadDiagnostic.reason, reason);
+    assert.equal(failure.downloadDiagnostic.exitCode, code);
+    assert.equal(failure.downloadDiagnostic.maxConnections, 2);
+    assert.equal(failure.downloadDiagnostic.maxSeeders, 0);
+    assert.equal(failure.downloadDiagnostic.trackerFailures, 1);
+    assert.deepEqual(failure.downloadDiagnostic.errorCodes, [19]);
+    assert.ok(updates.length >= 2);
+    assert.equal(JSON.stringify({ updates, message: failure.message }).includes('private-proxy-password'), false);
+    assert.equal(JSON.stringify(updates).includes('example.invalid'), false);
+    if (code === 9) assert.match(failure.message, /falta de espaço/);
+    if (code === 19) assert.match(failure.message, /DNS/);
+  }
+});
+
+test('abort waits for the child to exit and reports a pause instead of missing sources', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'slowview-aria-pause-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  const binary = join(directory, 'technical-paused-child');
+  await writeFile(binary, `#!${process.execPath}\nprocess.on('SIGINT',()=>setTimeout(()=>process.exit(0),30));\nsetInterval(()=>process.stdout.write('[#abc 1B/3763728590B(0%) CN:1]\\n'),10);\n`, { mode: 0o700 });
+  const controller = new AbortController(); let last;
+  await assert.rejects(runAriaDownload({ directory, torrent: join(directory, 'unused.torrent'), signal: controller.signal, binary,
+    onProgress: () => controller.abort(), onDiagnostic: value => { last = value; } }));
+  assert.equal(last.reason, 'paused'); assert.equal(last.exitCode, 0); assert.equal(last.maxConnections, 1);
+});
+
+test('three minutes without data records the timeout without claiming that peers do not exist', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'slowview-aria-idle-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  const binary = join(directory, 'technical-idle-clock');
+  await writeFile(binary, `#!${process.execPath}\nprocess.stdout.write('[#abc 0B/3763728590B(0%) CN:0]\\n');\nprocess.exit(7);\n`, { mode: 0o700 });
+  let calls = 0;
+  await assert.rejects(runAriaDownload({ directory, torrent: join(directory, 'unused.torrent'), signal: new AbortController().signal, binary, now: () => calls++ ? 180000 : 0 }), error => {
+    assert.equal(error.downloadDiagnostic.reason, 'no_transfer'); assert.equal(error.downloadDiagnostic.elapsedSeconds, 180);
+    assert.equal(error.downloadDiagnostic.maxConnections, 0); assert.match(error.message, /Não foi possível confirmar/); return true;
+  });
+});
+
 test('NRK download is authenticated, optional and checks capacity before creating an asset', async t => {
   const privateService = await setup(t, { authDisabled: false, dashboardPassword: 'senha-somente-deste-teste-nrk' });
   assert.equal((await privateService.call()).status, 401);
@@ -62,13 +106,26 @@ test('NRK download is authenticated, optional and checks capacity before creatin
   assert.equal((await lowDisk.call('/assets')).body.assets.length, 0);
 });
 
+test('diagnostics migration preserves the previous failed attempt and its byte count', async t => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'slowview-nrk-legacy-'));
+  const database = new DatabaseSync(join(dataDir, 'slowvista.sqlite'));
+  database.exec("CREATE TABLE footage_downloads(source_id TEXT PRIMARY KEY,asset_id TEXT NOT NULL,status TEXT NOT NULL,completed INTEGER NOT NULL DEFAULT 0,error TEXT,updated_at TEXT NOT NULL); INSERT INTO footage_downloads VALUES('flamsbanen','legacy-asset','failed',1234,'Mensagem anterior preservada','2026-10-19');");
+  database.close();
+  const service = await startServer({ port: 0, dataDir, distDir: null, authDisabled: true, enableWorker: false, nrkIngest: { enabled: false } });
+  t.after(async () => { await service.close(); await rm(dataDir, { recursive: true, force: true }); });
+  const state = await (await fetch(`${service.baseUrl}/api/footage/nrk`)).json();
+  assert.equal(state.download.completed, 1234); assert.equal(state.download.error, 'Mensagem anterior preservada');
+  assert.equal(state.download.status, 'failed'); assert.equal(state.download.diagnostics, null);
+});
+
 test('server imports a large file outside the browser cap, pauses/resumes once and preserves NRK credits in the MP4', { timeout: 90000 }, async t => {
   let attempts = 0, fixture, partialPath;
   const { service, dataDir, call } = await setup(t, { mediaMaxUploadBytes: 1024, nrkIngest: { enabled: true, freeBytes: async () => 12 * 1024 ** 3,
-    downloadImpl: async ({ directory, signal, onProgress }) => {
+    downloadImpl: async ({ directory, signal, onProgress, onDiagnostic }) => {
       attempts++; partialPath = join(directory, FLAMSBANEN.filename);
       if (attempts === 1) {
         await writeFile(partialPath, 'technical resume marker'); onProgress({ completed: 12345, total: FLAMSBANEN.bytes });
+        onDiagnostic({ exitCode: null, signal: null, elapsedSeconds: 2, completed: 12345, maxConnections: 1, maxSeeders: 0, trackerFailures: 0, errorCodes: [], reason: null });
         await new Promise((_, reject) => { const abort = () => reject(new Error('paused technical transfer')); signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort(); });
       } else {
         assert.equal(await readFile(partialPath, 'utf8'), 'technical resume marker');
@@ -86,6 +143,7 @@ test('server imports a large file outside the browser cap, pauses/resumes once a
   assert.equal(attempts, 1);
   assert.equal((await call(`/assets/${assetId}`, undefined, 'DELETE')).status, 409);
   const paused = await call('/nrk/flamsbanen/pause', {}); assert.equal(paused.body.download.status, 'paused');
+  assert.equal(paused.body.download.diagnostics.maxConnections, 1);
   assert.equal((await stat(partialPath)).isFile(), true);
   assert.equal((await call('/nrk/flamsbanen', {})).body.download.assetId, assetId);
   const ready = await waitFor(call, 'ready');

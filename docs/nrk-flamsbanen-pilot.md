@@ -47,6 +47,26 @@ O MP4 de uma adaptação CC BY-SA registra a licença e os créditos também nos
 
 O mapa e o modelo do trem ainda não estão confirmados. Não há posição animada inventada, restauração por IA, transmissão YouTube ou promessa de monetização nesta etapa.
 
+## Tentativa real interrompida em 0% e próxima consulta
+
+O usuário confirmou o painel atualizado na Netlify, a execução da importação no Pod e a mudança de **Baixando → Download pendente** após cerca de três minutos, com zero bytes registrados. Esse intervalo corresponde ao encerramento após 180 segundos sem transferência. A mensagem antiga agrupava todas as saídas não nulas do aria2; não comprova ausência de peers nem identifica o código daquela tentativa.
+
+A inspeção dos metadados originais confirmou `private=1` na Flåmsbanen e na Bergensbanen; a versão de verão sincronizada da Nordlandsbanen examinada não tem esse campo. O campo controla descoberta de peers, não a licença de reutilização nem a senha do painel. Torrents privados dependem dos rastreadores e não usam DHT para descobrir fontes. Não foi confirmada a saúde desses rastreadores no Pod.
+
+O novo código registra duração, código de saída, máximos de conexões/fontes completas quando informados pelo programa, falhas de rastreador e códigos numéricos. Distingue problemas de armazenamento, DNS, opções inválidas e transferência incompleta. Descarta os logs brutos para não expor IPs, caminhos ou credenciais de proxy. A migração preserva bytes e a mensagem da tentativa anterior; os detalhes novos só serão registrados em uma tentativa executada pelo backend atualizado.
+
+Para consultar fontes sem parar a aplicação, abra **outra aba do terminal do Pod**:
+
+```sh
+cd /workspace/Slow-View-TV &&
+git pull --ff-only origin main &&
+npm run check:nrk-sources
+```
+
+O comando não abre o banco, não lê a senha, não baixa vídeo, não inicia P2P e não altera a biblioteca. Reutiliza o torrent oficial já obtido no Pod, conferindo seu SHA-256 e info hash. Consulta também um espelho citado por um leitor nos comentários da [publicação NRK de 2018](https://nrkbeta.no/2018/02/13/hva-skjedde-med-bittorrent/) e compara tamanho, tamanho das partes e todos os hashes de partes com o arquivo oficial. O espelho não é oficial nem está aprovado para importação automática. Uma igualdade dos dados comprova equivalência do conteúdo descrito, não a presença de peers ativos.
+
+A consulta ao rastreador registra apenas se recebeu resposta HTTP e o status; uma resposta pode vir de um proxy e não prova que o vídeo esteja disponível. O relatório resultante não contém senha nem logs brutos. Se houver candidato equivalente e público, revisar seu endereço e checksum antes de integrá-lo.
+
 ## Evidência de validação
 
 Testes usam mídia técnica isolada, inclusive um MP4 esparso com o tamanho esperado, para verificar arquivo grande sem depender de peers ou consumir 3,76 GB físicos. Exercitam autenticação, disco insuficiente, rejeição de torrent alterado, ausência de duplicação, pausa/retomada, reinício, Range, leitura por FFprobe, edição real por FFmpeg e preservação de créditos/licença no MP4. O navegador verifica os controles, progresso, entrada no editor, exportação, créditos e largura móvel.
@@ -59,4 +79,6 @@ CHROMIUM_NO_SANDBOX=1 npm run test:nrk
 
 Esses testes **não comprovam obtenção do vídeo NRK real**. O torrent foi obtido na pesquisa anterior; na tentativa de 19/10/2026 deste ambiente, o acesso HTTPS à NRK retornou 403 pelo proxy e não há acesso P2P autorizado nem sessão administrativa no Pod. O download real deve ser conferido no Pod após a atualização. Preserve o proxy do ambiente Codex; não tente contornar suas restrições.
 
-Validação em 19/10/2026: **65/65** testes da suíte geral passaram, assim como build, navegador NRK e navegador do editor existente. Os parâmetros de aria2 foram conferidos no manual oficial; o binário e a conectividade BitTorrent ainda precisam ser exercitados no Pod. Nenhuma captura do teste técnico representa uma viagem NRK já obtida.
+Validação inicial em 19/10/2026: **65/65** testes da suíte geral passaram, assim como build, navegador NRK e navegador do editor existente. Após o relato, os testes específicos foram ampliados para subprocessos com falha, pausa e migração de diagnósticos, e inspeção/comparação de torrents. O navegador também confere a exibição dos contadores.
+
+aria2 **1.37.0** real foi obtido de pacotes Debian com verificação APT, extraído em diretório temporário e executado localmente: a mesma lista de opções foi aceita ao inspecionar o torrent oficial; uma transferência HTTP exclusivamente em localhost validou as linhas reais de progresso. Isso não exercita trackers nem peers externos. Na pesquisa deste ambiente, o HTTPS NRK recebeu HTTP 403, o espelho teve CONNECT 403 do proxy e a consulta HTTP ao rastreador recebeu 403; não extrapolar esses resultados para a rede do Pod. Nenhum vídeo NRK real foi recebido no ambiente Codex.
