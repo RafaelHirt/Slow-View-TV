@@ -15,7 +15,7 @@ try {
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE || '/usr/bin/chromium', chromiumSandbox: process.env.CHROMIUM_NO_SANDBOX !== '1' });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = []; page.on('pageerror', error => errors.push(error.message));
-  await page.goto(service.baseUrl);
+  await page.goto(`${service.baseUrl}/prototype`);
   await page.getByRole('heading', { name: 'Um começo seguro.' }).waitFor();
   assert.equal((await fetch(`${service.baseUrl}/api/plans`)).status, 401);
   await page.getByLabel('Criar senha', { exact: true }).fill(password);

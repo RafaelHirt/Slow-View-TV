@@ -8,7 +8,8 @@ if [[ $# -gt 0 ]]; then shift; fi
 case "$slowview_action" in
   start) slowview_entry=scripts/runpod-start.mjs ;;
   gpu-check) slowview_entry=scripts/runpod-gpu-check.mjs ;;
-  *) printf '%s\n' 'Uso: bash scripts/runpod-start.sh [start|gpu-check]' >&2; exit 1 ;;
+  footage) slowview_entry=scripts/footage-start.mjs ;;
+  *) printf '%s\n' 'Uso: bash scripts/runpod-start.sh [start|gpu-check|footage]' >&2; exit 1 ;;
 esac
 if [[ ! -f node_modules/playwright/package.json || ! -f node_modules/playwright-core/package.json ]]; then
   printf '%s\n' 'Preparação incompleta: Playwright não está instalado. Execute bash scripts/runpod-setup.sh e aguarde a conclusão antes de iniciar ou verificar a GPU.' >&2

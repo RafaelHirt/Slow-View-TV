@@ -18,7 +18,7 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1050 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(service.baseUrl);
+  await page.goto(`${service.baseUrl}/prototype`);
   await page.getByLabel('Chave de acesso').fill(token);
   await page.getByRole('button', { name: 'Entrar no ateliê', exact: true }).click();
   await page.getByRole('button', { name: /Minhas rotas/ }).click();
@@ -91,7 +91,7 @@ try {
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const phone = await mobile.newPage();
   phone.on('pageerror', (e) => errors.push(e.message));
-  await phone.goto(service.baseUrl);
+  await phone.goto(`${service.baseUrl}/prototype`);
   await phone.getByRole('button', { name: 'Conexão com o ateliê', exact: true }).click();
   await phone.getByLabel('Chave de acesso').fill(token);
   await phone.getByRole('button', { name: 'Entrar no ateliê', exact: true }).click();

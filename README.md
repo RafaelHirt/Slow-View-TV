@@ -1,12 +1,27 @@
 # Slow View TV Studio
 
-Ateliê para organizar percursos, salvar atmosferas e exportar viagens virtuais em MP4. Interface em português, com cores suaves e prévia 3D.
+Ateliê para reunir **filmagens reais**, selecionar trechos e preparar MP4s com imagem e áudio suaves. Interface em português, reprodução iniciada por você e player sem distrações.
 
 Repositório do projeto: [RafaelHirt/Slow-View-TV](https://github.com/RafaelHirt/Slow-View-TV). A marca pública é **Slow View TV**. Nomes internos de banco, variáveis e do checkout existente permanecem compatíveis com a primeira versão.
 
-**Estado da primeira versão:** o percurso segue os pontos do GPX importado, com elevação quando completa. Árvores, terreno ao redor e demais elementos são uma maquete procedural ilustrativa. O software ainda não reconstrói a paisagem real nem produz filmagem fotorealista. Não há provedor de IA conectado e a exportação ainda é sem áudio.
+**Foco atual:** importar vídeos e sons com fonte e licença registradas, editar um trecho contínuo e assistir com controle de volume e pausa opcional. Consulte [o fluxo de filmagens reais](docs/real-footage.md) para uso, implantação e limites. A busca integrada no Pexels é opcional e requer uma chave privada no servidor; sem ela, a biblioteca recebe arquivos enviados pelo usuário. Nenhum catálogo de filmagens reais vem pré-carregado.
 
-## O que funciona
+O protótipo procedural anterior foi preservado em `/prototype`, com seus dados e produções. Ele usa cenários ilustrativos e não reconstrói a paisagem real. As seções sobre GPX, atlas e renderização 3D abaixo documentam esse protótipo.
+
+## Filmagens reais
+
+- Biblioteca de MP4/WebM e áudio MP3/WAV, com origem, créditos, licença e conferência de direitos.
+- Envio de arquivos ou importação de links diretos dos CDNs Pexels/Pixabay. Busca Pexels quando configurada; links de páginas e do YouTube não são arquivos importáveis.
+- Seleção de um trecho de 3 segundos a 1 hora; exportação H.264 na cadência original em HD, Full HD ou 4K, sem ampliar a fonte.
+- Entrada e saída suaves, áudio original nivelado, faixa ambiente opcional ou silêncio; créditos preservados por edição.
+- Reprodução sem autoplay, player sem distrações, volume inicial baixo e pausa automática opcional.
+- Processamento FFmpeg na CPU. Chromium e GPU são necessários somente para o antigo fluxo 3D.
+
+Em desenvolvimento, use `npm run dev`. Para build e execução local, `npm run build` e `npm start`; configure `DASHBOARD_PASSWORD` privadamente para entrar. No Pod já preparado, `npm run start:footage` inicia apenas a edição real na porta interna 3000, atrás do Nginx 3001. Neste piloto, manteremos a API e o processamento no RunPod existente, com o painel na Netlify, sem contratar outro servidor. Desligar o Pod também interrompe o acesso à biblioteca e aos arquivos; separar o catálogo do processamento é uma evolução posterior.
+
+Há uma amostra real curta para importação voluntária na biblioteca vazia, com fonte e licença para conferência. O [guia do primeiro teste](docs/pilot-real-footage.md) registra o material, os limites e a ordem de atualização do Pod e da Netlify.
+
+## Arquivo do protótipo 3D
 
 - Importação GPX com um único segmento contínuo, até 12 MB e 100.000 pontos; rejeição de coordenadas inválidas, múltiplos segmentos e percurso sem distância.
 - Banco SQLite persistente de rotas e versões. Cada versão guarda nome, estação do ano, horário, clima, duração, temperatura simulada opcional e exibição do mapa.

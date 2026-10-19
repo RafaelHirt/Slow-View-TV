@@ -10,6 +10,7 @@ import { createQueue } from './queue.mjs';
 import { createRailwayRouter } from './railway.mjs';
 import { createAuth, isLoopback } from './auth.mjs';
 import { createKnowledgeRouter } from './knowledge.mjs';
+import { createFootageService } from './footage.mjs';
 import { HttpError, validateRoute, validatePlan, validateVariant, validateJob } from './validation.mjs';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,6 +48,9 @@ export async function startServer(options = {}) {
     if (!isLoopback(host) && !auth.configured()) throw new Error('Configure DASHBOARD_PASSWORD, ADMIN_TOKEN ou uma senha local persistida antes de expor o servidor fora de localhost.');
   } catch (error) { db.close(); throw error; }
   const app = express();
+  let footage;
+  try { footage = await createFootageService({ db, dataDir, maxUploadBytes: options.mediaMaxUploadBytes, sources: options.footageSources, enableWorker: options.enableFootageWorker !== false }); }
+  catch (error) { db.close(); throw error; }
   let queue;
   let closed = false;
   const enableWorker = options.enableWorker !== false;
@@ -108,12 +112,14 @@ export async function startServer(options = {}) {
   app.use('/api', (req, res, next) => {
     if (req.path === '/health') return next();
     const workerRead = req.method === 'GET' && /^\/jobs\/[^/]+(?:\/scene)?$/.test(req.path) && secureEqual(req.get('x-slowvista-worker'), workerToken);
-    if (!auth.enforced || workerRead || auth.authenticated(req) || validDownload({ ...req, path: `/api${req.path}`, query: req.query })) return next();
+    const downloadRequest = { method: req.method, path: `/api${req.path}`, query: req.query };
+    if (!auth.enforced || workerRead || auth.authenticated(req) || validDownload(downloadRequest) || footage.validDownload(downloadRequest)) return next();
     res.status(401).json({ error: 'Acesso protegido. Entre com sua senha para abrir o painel.' });
   });
   const railwayRouter = createRailwayRouter({ db });
   app.use('/api/railway', railwayRouter);
   app.use('/api/knowledge', createKnowledgeRouter({ db }));
+  app.use('/api/footage', footage.router);
 
   app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'slowvista', authRequired: auth.enforced }));
   app.get('/api/plans', (_req, res) => res.json({ plans: db.prepare('SELECT * FROM route_plans ORDER BY created_at DESC, rowid DESC').all().map(planFromRow) }));
@@ -210,7 +216,7 @@ export async function startServer(options = {}) {
   const server = createServer(app);
   try {
     await new Promise((resolveListening, reject) => { server.once('error', reject); server.listen(port, host, resolveListening); });
-  } catch (error) { db.close(); throw error; }
+  } catch (error) { await footage.close(); db.close(); throw error; }
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}`;
   allowedOrigins.add(baseUrl);
@@ -230,6 +236,7 @@ export async function startServer(options = {}) {
       if (closed) return;
       closed = true;
       await queue.close();
+      await footage.close();
       await railwayRouter.railwayService.close();
       await new Promise((done) => server.close(done));
       db.close();

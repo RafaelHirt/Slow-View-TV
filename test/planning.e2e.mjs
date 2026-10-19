@@ -11,7 +11,7 @@ let browser;
 try {
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE || '/usr/bin/chromium', chromiumSandbox: process.env.CHROMIUM_NO_SANDBOX !== '1', headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  await page.goto(service.baseUrl);
+  await page.goto(`${service.baseUrl}/prototype`);
   await page.getByRole('button', { name: /Minhas rotas/ }).click();
   await page.getByRole('button', { name: 'Planejar rota', exact: true }).click();
   await page.getByLabel('Origem', { exact: true }).fill('Viena');

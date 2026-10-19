@@ -46,18 +46,22 @@ export function resolveRunpodConfig(env, { nodeVersion = process.versions.node, 
   };
 }
 
-export async function startRunpod(env = process.env) {
-  const config = resolveRunpodConfig(env);
+export async function startRunpod(env = process.env, { footageOnly = false } = {}) {
+  const config = resolveRunpodConfig(footageOnly ? { ...env, CHROMIUM_GPU_MODE: 'software', CHROMIUM_GPU_BACKEND: 'auto', CHROMIUM_NO_SANDBOX: '0' } : env);
   await access(resolve(root, 'dist/index.html'), constants.R_OK);
-  await access(config.chromiumExecutable, constants.X_OK);
+  if (!footageOnly) await access(config.chromiumExecutable, constants.X_OK);
   await mkdir(config.dataDir, { recursive: true, mode: 0o700 });
   await access(config.dataDir, constants.R_OK | constants.W_OK);
   const ffmpeg = spawnSync(config.ffmpegExecutable, ['-hide_banner', '-encoders'], { encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'ignore'] });
   if (ffmpeg.status !== 0 || !/\blibx264\b/.test(ffmpeg.stdout || '')) throw new Error('FFmpeg com encoder libx264 não está disponível. Execute a preparação do Pod.');
+  if (footageOnly) {
+    const ffprobe = spawnSync(env.FFPROBE_EXECUTABLE || 'ffprobe', ['-version'], { timeout: 15000, stdio: 'ignore' });
+    if (ffprobe.status !== 0) throw new Error('FFprobe não está disponível. Instale o pacote FFmpeg no servidor.');
+  }
   await checkStorageLocking(config.dataDir);
   // The renderer uses this process variable when spawning the encoder.
   process.env.FFMPEG_EXECUTABLE = config.ffmpegExecutable;
-  return startServer(config);
+  return startServer({ ...config, ...(footageOnly ? { enableWorker: false } : {}) });
 }
 
 export async function checkStorageLocking(dataDir) {

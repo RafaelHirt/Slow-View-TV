@@ -32,7 +32,7 @@ try {
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM_EXECUTABLE || '/usr/bin/chromium', chromiumSandbox: process.env.CHROMIUM_NO_SANDBOX !== '1', args: ['--disable-dev-shm-usage', '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
   const pageErrors = []; page.on('pageerror', (e) => pageErrors.push(e.message));
-  await page.goto(service.baseUrl);
+  await page.goto(`${service.baseUrl}/prototype`);
   await page.getByLabel('Chave de acesso').fill(token);
   await page.getByRole('button', { name: 'Entrar no ateliê', exact: true }).click();
   await page.getByRole('heading', { name: 'O mundo, no seu ritmo.' }).waitFor();

@@ -48,7 +48,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         <div className="auth-lock"><LockKeyhole size={23} strokeWidth={1.5} /></div>
         <div className="eyebrow">SEU ATELIÊ PARTICULAR</div>
         <h1>{setup ? 'Um começo seguro.' : 'Bem-vindo ao seu ritmo.'}</h1>
-        <p className="auth-intro">{!status ? 'Conecte o painel ao servidor para abrir seu espaço de criação.' : setup ? 'Crie uma senha para guardar suas rotas, fontes e produções.' : 'Entre para continuar suas próximas viagens.'}</p>
+        <p className="auth-intro">{!status ? 'Conecte o painel ao servidor para abrir seu espaço de criação.' : setup ? 'Crie uma senha para guardar seus vídeos, fontes e edições.' : 'Entre para continuar suas próximas criações.'}</p>
         {status && (!setup || status.setupAllowed) && <form onSubmit={(event) => void submit(event)}>
           <label className="field-label" htmlFor="dashboard-password">{token ? 'Chave de acesso' : setup ? 'Criar senha' : 'Senha'}</label>
           <input id="dashboard-password" type="password" autoComplete={setup ? 'new-password' : token ? 'off' : 'current-password'} required minLength={token ? 1 : 12} maxLength={256} value={credential} onChange={(event) => setCredential(event.target.value)} aria-describedby={setup ? 'auth-hint' : undefined} autoFocus />
