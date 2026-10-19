@@ -42,7 +42,7 @@ apt-get update
 # The NVIDIA vendor library does not supply the generic EGL loader. Chromium's
 # install-deps list can omit libegl1; NVIDIA Vulkan may fail to expose
 # vkCreateInstance when this loader is absent, even though nvidia-smi works.
-apt-get install -y --no-install-recommends ca-certificates curl git xz-utils ffmpeg util-linux libegl1
+apt-get install -y --no-install-recommends ca-certificates curl git xz-utils ffmpeg aria2 util-linux libegl1
 
 if ! command -v node >/dev/null || ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)'; then
   case $(uname -m) in x86_64) slowview_arch=x64 ;; aarch64|arm64) slowview_arch=arm64 ;; *) fail 'Arquitetura não suportada por este instalador.' ;; esac

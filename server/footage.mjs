@@ -8,8 +8,9 @@ import { pipeline } from 'node:stream/promises';
 import { HttpError } from './validation.mjs';
 import { validateMediaMetadata, validateFootageEdit, looksLikeMedia, probeMedia, editFootage } from './footage-media.mjs';
 import { createFootageSources, trustedMediaUrl } from './footage-sources.mjs';
+import { createNrkIngest } from './nrk-ingest.mjs';
 
-export async function createFootageService({ db, dataDir, maxUploadBytes = Number(process.env.MEDIA_MAX_UPLOAD_MB || 512) * 1024 * 1024, sources: sourceOptions, enableWorker = true } = {}) {
+export async function createFootageService({ db, dataDir, maxUploadBytes = Number(process.env.MEDIA_MAX_UPLOAD_MB || 512) * 1024 * 1024, sources: sourceOptions, nrk: nrkOptions, enableWorker = true } = {}) {
   if (!Number.isSafeInteger(maxUploadBytes) || maxUploadBytes < 1024 || maxUploadBytes > 10 * 1024 ** 3) throw new Error('MEDIA_MAX_UPLOAD_MB deve estar entre 1 e 10240.');
   const directory = join(dataDir, 'footage');
   await mkdir(directory, { recursive: true });
@@ -110,6 +111,11 @@ export async function createFootageService({ db, dataDir, maxUploadBytes = Numbe
     }).finally(() => { running = null; });
   }
   function noTransferCapacity() { if (closed || transfers.size >= 2) throw new HttpError(429, 'Aguarde o envio atual terminar antes de importar outro arquivo.'); }
+  const nrk = await createNrkIngest({ db, directory, options: nrkOptions, newAsset, getAsset: id => assetResponse(assetRow(id)),
+    publishAsset: (id, filename, probe, size) => db.prepare("UPDATE footage_assets SET status='ready',file_name=?,probe=?,bytes=?,error=NULL WHERE id=?").run(filename, JSON.stringify(probe), size, id) });
+  router.get('/nrk', (_req, res) => res.json(nrk.snapshot()));
+  router.post('/nrk/:id', async (req, res) => res.status(202).json(await nrk.start(req.params.id)));
+  router.post('/nrk/:id/pause', async (req, res) => res.json(await nrk.pause(req.params.id)));
   router.get('/config', (_req, res) => res.json({ pexelsSearch: sources.configured, maxUploadBytes }));
   router.get('/search', async (req, res) => res.json({ videos: await sources.search(req.query.q) }));
   router.get('/assets', (_req, res) => res.json({ assets: db.prepare('SELECT * FROM footage_assets ORDER BY created_at DESC,rowid DESC').all().map(assetResponse) }));
@@ -150,10 +156,11 @@ export async function createFootageService({ db, dataDir, maxUploadBytes = Numbe
   router.delete('/assets/:id', async (req, res) => {
     const row = required(assetRow(req.params.id), 'Material não encontrado.');
     if (transfers.has(row.id)) throw new HttpError(409, 'Aguarde a importação terminar.');
+    if (nrk.snapshot().download?.assetId === row.id && ['downloading', 'verifying'].includes(nrk.snapshot().download?.status)) throw new HttpError(409, 'Pause o download da viagem antes de remover o material.');
     const used = db.prepare('SELECT settings FROM footage_exports').all().some(item => { const edit = JSON.parse(item.settings); return edit.assetId === row.id || edit.ambientId === row.id; });
     if (used) throw new HttpError(409, 'Este material faz parte de uma edição e deve ser preservado.');
     if (row.file_name) await rm(join(directory, row.file_name), { force: true });
-    db.prepare('DELETE FROM footage_assets WHERE id=?').run(row.id); res.sendStatus(204);
+    db.prepare('DELETE FROM footage_assets WHERE id=?').run(row.id); nrk.forgetAsset(row.id); res.sendStatus(204);
   });
   router.get('/exports', (_req, res) => res.json({ exports: db.prepare('SELECT * FROM footage_exports ORDER BY created_at DESC,rowid DESC').all().map(exportResponse) }));
   router.post('/exports', (req, res) => {
@@ -200,6 +207,7 @@ export async function createFootageService({ db, dataDir, maxUploadBytes = Numbe
     },
     async close() {
       closed = true; for (const item of transfers.values()) item.controller.abort(); running?.controller?.abort();
+      await nrk.close();
       await Promise.allSettled([...transfers.values()].map(item => item.task).concat(running?.task || []));
       await sources.close();
     },

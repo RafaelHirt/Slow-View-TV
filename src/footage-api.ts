@@ -15,10 +15,19 @@ export type FootageExport = FootageEdit & {
   id: string; status: 'queued' | 'editing' | 'completed' | 'failed' | 'cancelled';
   duration: number; width: number; height: number; frameRate?: number; hasAudio: boolean; progress: number;
   error?: string; fileUrl?: string; sources: Omit<MediaMetadata, 'rightsConfirmed'>[];
+  outputLicense?: string; outputLicenseUrl?: string;
+};
+export type NrkImport = {
+  enabled: boolean; available: boolean;
+  source: { id: string; title: string; bytes: number; licenseUrl: string };
+  download: null | { status: 'downloading' | 'verifying' | 'paused' | 'failed' | 'ready'; completed: number; total: number; error: string | null; assetId: string | null; asset?: FootageAsset };
 };
 export type StockVideo = { id: string; title: string; sourceUrl: string; author: string; duration: number; width: number; height: number; fileUrl: string };
 export const mediaUrl = (path: string) => `${apiBase}${path}`;
 export const footageApi = {
+  nrk: () => request<NrkImport>('/footage/nrk'),
+  importNrk: () => request<NrkImport>('/footage/nrk/flamsbanen', { method: 'POST' }),
+  pauseNrk: () => request<NrkImport>('/footage/nrk/flamsbanen/pause', { method: 'POST' }),
   config: () => request<{ pexelsSearch: boolean; maxUploadBytes: number }>('/footage/config'),
   assets: () => request<{ assets: FootageAsset[] }>('/footage/assets'),
   exports: () => request<{ exports: FootageExport[] }>('/footage/exports'),

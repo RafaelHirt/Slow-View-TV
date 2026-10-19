@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { ArrowRight, ArrowUpRight, Check, MapPin, Search, TrainFront } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowRight, ArrowUpRight, Check, Download, MapPin, Pause, Search, TrainFront } from 'lucide-react';
+import { footageApi, type NrkImport } from './footage-api';
 import './train-library.css';
 
 // Editorial catalogue from the official NRK publications checked on 19 October 2026.
-// These are researched journeys; they are not imported footage or synchronized maps.
+// Availability comes from the server; editorial metadata does not prove a download.
 const journeys = [
   {
     id: 'nordlandsbanen', name: 'Nordlandsbanen', origin: 'Trondheim', destination: 'Bodø', country: 'Noruega',
@@ -38,25 +39,51 @@ const journeys = [
 ];
 
 const searchable = (value: string) => value.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ø/g, 'o');
+const durationText = (seconds: number) => [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, Math.floor(seconds % 60)].map((value, index) => index ? String(value).padStart(2, '0') : value).join(':');
 
-export function TrainLibrary({ onLibrary }: { onLibrary: () => void }) {
+export function TrainLibrary({ onLibrary, onOpenAsset }: { onLibrary: () => void; onOpenAsset: (id: string) => void }) {
   const [query, setQuery] = useState('');
+  const [nrk, setNrk] = useState<NrkImport | null>(null), [error, setError] = useState(''), [loadError, setLoadError] = useState(''), [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const load = () => footageApi.nrk().then(value => { if (active) { setNrk(value); setLoadError(''); } }).catch(() => { if (active) setLoadError('A importação de viagens precisa da versão atual do servidor RunPod. A biblioteca existente continua disponível.'); });
+    void load(); const timer = setInterval(() => { if (!document.hidden) void load(); }, 4000);
+    return () => { active = false; clearInterval(timer); };
+  }, []);
+  async function transfer(pause = false) {
+    setBusy(true); setError('');
+    try { setNrk(await (pause ? footageApi.pauseNrk() : footageApi.importNrk())); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Não foi possível iniciar a transferência.'); }
+    finally { setBusy(false); }
+  }
+  const download = nrk?.download, transferring = download && ['downloading', 'verifying'].includes(download.status);
+  const importLabels = { downloading: 'Baixando', verifying: 'Conferindo arquivo', paused: 'Pausado', failed: 'Download pendente', ready: 'Na biblioteca' };
   const visible = journeys.filter(journey => searchable(`${journey.name} ${journey.origin} ${journey.destination} ${journey.country} ${journey.train}`).includes(searchable(query.trim())));
   return <>
     <div className="ft-heading"><div><p className="ft-eyebrow">PERCURSOS IDENTIFICADOS, HISTÓRIAS REAIS</p><h1>Viagens de trem.</h1><p>Conheça os percursos pesquisados e acompanhe a preparação de cada viagem.</p></div></div>
     <section className="ft-panel ft-train-intro" aria-label="Estado do catálogo de trens">
-      <div><TrainFront size={25} /><div><strong>{journeys.length} percursos pesquisados</strong><p>Fontes e condições de uso consultadas. As filmagens ainda precisam ser obtidas e preparadas para assistir no ateliê.</p></div></div>
+      <div><TrainFront size={25} /><div><strong>{journeys.length} percursos pesquisados</strong><p>{download?.status === 'ready' ? 'Flåmsbanen disponível na biblioteca para conferir e preparar uma amostra. As outras viagens continuam em preparação.' : 'Fontes e condições de uso consultadas. Comece pela importação da Flåmsbanen para conferir a primeira viagem completa.'}</p></div></div>
       <button className="ft-button" onClick={onLibrary}>Abrir biblioteca de materiais <ArrowRight size={16} /></button>
     </section>
     <label className="ft-train-search"><span><Search size={15} />Buscar percurso, cidade ou trem</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Ex.: Trondheim, Flåm ou Bergen" /></label>
     <div className="ft-train-grid">{visible.map(journey => <article className="ft-panel ft-train-card" key={journey.id} aria-labelledby={`journey-${journey.id}`}>
-      <div className="ft-train-card-top"><span><MapPin size={14} />{journey.country}</span><span className="ft-status">Em preparação</span></div>
+      <div className="ft-train-card-top"><span><MapPin size={14} />{journey.country}</span><span className="ft-status">{journey.id === 'flamsbanen' && download ? importLabels[download.status] : 'Em preparação'}</span></div>
       <h2 id={`journey-${journey.id}`}>{journey.name}</h2>
       <p className="ft-train-route"><span>{journey.origin}</span><ArrowRight size={17} aria-label="até" /><span>{journey.destination}</span></p>
       <p>{journey.description}</p>
-      <dl><div><dt>Viagem</dt><dd>{journey.duration}</dd></div><div><dt>Trem</dt><dd>{journey.train}</dd></div><div><dt>Material identificado</dt><dd>{journey.versions}</dd></div><div><dt>Mapa</dt><dd>{journey.location}</dd></div></dl>
+      <dl><div><dt>Viagem</dt><dd>{journey.id === 'flamsbanen' && download?.asset?.duration ? `${durationText(download.asset.duration)} · duração do arquivo` : journey.duration}</dd></div><div><dt>Trem</dt><dd>{journey.train}</dd></div><div><dt>Material identificado</dt><dd>{journey.versions}</dd></div><div><dt>Mapa</dt><dd>{journey.location}</dd></div></dl>
       <div className="ft-train-source"><span><Check size={15} />Fonte: NRK · publicação consultada</span><a href={journey.licenseUrl} target="_blank" rel="noreferrer">{journey.license}</a><p>Créditos e condições da publicação devem acompanhar a edição.</p></div>
-      <details><summary>O que falta para assistir</summary><p>Obter o arquivo de vídeo, conferir imagem e áudio, preparar o mapa e revisar a edição. Este registro apresenta a pesquisa da viagem.</p><a href={journey.rightsUrl} target="_blank" rel="noreferrer">Condições publicadas pela NRK <ArrowUpRight size={13} /></a></details>
+      <details><summary>O que falta para assistir</summary><p>{journey.id === 'flamsbanen' && download?.status === 'ready' ? 'O arquivo está na biblioteca. Confira imagem e som antes de preparar a primeira amostra. O mapa permanece em preparação.' : 'Obter o arquivo de vídeo, conferir imagem e áudio, preparar o mapa e revisar a edição. Este registro apresenta a pesquisa da viagem.'}</p><a href={journey.rightsUrl} target="_blank" rel="noreferrer">Condições publicadas pela NRK <ArrowUpRight size={13} /></a></details>
+      {journey.id === 'flamsbanen' && <div className="ft-train-import">
+        <p>Primeira viagem · arquivo 2D Full HD de 3,76 GB. Baixado diretamente no RunPod, sem passar pelo seu computador.</p>
+        {download?.status === 'ready' && download.assetId ? <button className="ft-button ft-primary" onClick={() => onOpenAsset(download.assetId!)}>Abrir viagem e preparar amostra <ArrowRight size={15} /></button> : <>
+          {transferring && <><progress max={download.total} value={download.completed} aria-label="Download da Flåmsbanen" /><p role="status">{download.status === 'verifying' ? 'Conferindo o arquivo recebido…' : `${Math.floor(download.completed / download.total * 100)}% · ${(download.completed / 1e9).toFixed(2).replace('.', ',')} de 3,76 GB. ${download.completed === 0 ? 'Procurando fontes do arquivo…' : 'O download continua enquanto o servidor estiver ligado.'}`}</p></>}
+          <button className="ft-button ft-primary" disabled={busy || !nrk?.available} onClick={() => void transfer(Boolean(transferring))}>{transferring ? <Pause size={15} /> : <Download size={15} />}{busy ? 'Aguarde…' : transferring ? 'Pausar download' : download ? 'Retomar download no RunPod' : 'Baixar viagem no RunPod'}</button>
+          {nrk && !nrk.available && <p>Atualize e ative a importação no RunPod para começar.</p>}
+        </>}
+        {(error || loadError || download?.error) && <p className="ft-error" role="alert">{error || loadError || download?.error}</p>}
+        <p>Conferir o som e a imagem faz parte da preparação. A edição mantém créditos NRK e licença CC BY-SA.</p>
+      </div>}
       <a className="ft-button" href={journey.sourceUrl} target="_blank" rel="noreferrer">Ver publicação da viagem <ArrowUpRight size={15} /></a>
     </article>)}</div>
     {!visible.length && <div className="ft-panel ft-empty"><TrainFront size={30} /><h2>Nenhum percurso encontrado.</h2><p>Tente o nome da viagem, uma cidade ou o trem.</p><button className="ft-button" onClick={() => setQuery('')}>Limpar busca</button></div>}

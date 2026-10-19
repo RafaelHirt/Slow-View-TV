@@ -49,7 +49,7 @@ export async function startServer(options = {}) {
   } catch (error) { db.close(); throw error; }
   const app = express();
   let footage;
-  try { footage = await createFootageService({ db, dataDir, maxUploadBytes: options.mediaMaxUploadBytes, sources: options.footageSources, enableWorker: options.enableFootageWorker !== false }); }
+  try { footage = await createFootageService({ db, dataDir, maxUploadBytes: options.mediaMaxUploadBytes, sources: options.footageSources, nrk: options.nrkIngest, enableWorker: options.enableFootageWorker !== false }); }
   catch (error) { db.close(); throw error; }
   let queue;
   let closed = false;

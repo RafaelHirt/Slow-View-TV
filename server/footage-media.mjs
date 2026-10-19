@@ -2,7 +2,8 @@ import { spawn } from 'node:child_process';
 import { HttpError } from './validation.mjs';
 
 export const FOOTAGE_FORMATS = Object.freeze({ '720p': [1280, 720], '1080p': [1920, 1080], '2160p': [3840, 2160] });
-export const FOOTAGE_LICENSES = ['own', 'cc0', 'pexels', 'pixabay', 'permission'];
+export const SHARE_ALIKE_LICENSES = Object.freeze({ 'cc-by-sa-3.0': 'https://creativecommons.org/licenses/by-sa/3.0/', 'cc-by-sa-3.0-no': 'https://creativecommons.org/licenses/by-sa/3.0/no/' });
+export const FOOTAGE_LICENSES = ['own', 'cc0', 'pexels', 'pixabay', 'permission', ...Object.keys(SHARE_ALIKE_LICENSES)];
 
 export function mediaText(value, name, max = 240, optional = false) {
   if (optional && (value === undefined || value === '')) return '';
@@ -25,7 +26,7 @@ export function validateMediaMetadata(body) {
   return {
     title: mediaText(body.title, 'Nome'), license: body.license,
     sourceUrl: publicPage(body.sourceUrl, body.license === 'own'),
-    attribution: mediaText(body.attribution, 'Autor e créditos', 1000, true),
+    attribution: mediaText(body.attribution, 'Autor e créditos', 1000, !SHARE_ALIKE_LICENSES[body.license]),
     licenseNotes: mediaText(body.licenseNotes, 'Observações da licença', 2000, true),
     rightsConfirmed: body.rightsConfirmed,
   };
@@ -78,8 +79,11 @@ export function validateFootageEdit(body, video, ambient) {
   if (Math.min(dimensions[0] / video.width, dimensions[1] / video.height) > 1.001) throw new HttpError(400, 'A filmagem é menor que a resolução escolhida. Use uma resolução menor para preservar a imagem.');
   if (!['original', 'ambient', 'silent'].includes(body.audioMode)) throw new HttpError(400, 'Escolha o áudio original, uma faixa ambiente ou silêncio.');
   if (body.audioMode === 'ambient' && (!ambient || ambient.status !== 'ready' || !ambient.hasAudio || !ambient.rightsConfirmed)) throw new HttpError(400, 'Escolha uma faixa de áudio pronta e com licença conferida.');
+  const outputLicense = SHARE_ALIKE_LICENSES[video.license] ? video.license : body.audioMode === 'ambient' && SHARE_ALIKE_LICENSES[ambient.license] ? ambient.license : null;
+  if (outputLicense && [video, ...(body.audioMode === 'ambient' ? [ambient] : [])].some(item => !['own', 'cc0', outputLicense].includes(item.license))) throw new HttpError(400, 'Para esta adaptação CC BY-SA, use materiais próprios, CC0 ou da mesma licença. A compatibilidade de outras licenças precisa ser conferida antes da combinação.');
   const duration = Math.round((end - start) * 1000) / 1000;
   return { title: mediaText(body.title, 'Nome da edição'), assetId: video.id, ambientId: body.audioMode === 'ambient' ? ambient.id : null,
+    ...(outputLicense ? { outputLicense, outputLicenseUrl: SHARE_ALIKE_LICENSES[outputLicense] } : {}),
     start, end, duration, resolution: body.resolution, width: dimensions[0], height: dimensions[1], audioMode: body.audioMode,
     frameRate: video.frameRate || 0, hasAudio: body.audioMode === 'ambient' || (body.audioMode === 'original' && video.hasAudio) };
 }
@@ -94,7 +98,9 @@ export async function editFootage({ edit, videoPath, ambientPath, outputPath, si
   args.push('-map', '0:v:0', '-vf', `scale=${edit.width}:${edit.height}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${edit.width}:${edit.height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fade=t=in:st=0:d=${fade},fade=t=out:st=${fadeOut}:d=${fade}`, '-fps_mode', 'passthrough');
   if (edit.hasAudio) args.push('-map', edit.audioMode === 'ambient' ? '1:a:0' : '0:a:0', '-af', `loudnorm=I=-22:TP=-2:LRA=7:linear=false,aresample=48000,afade=t=in:st=0:d=${fade},afade=t=out:st=${fadeOut}:d=${fade}`, '-c:a', 'aac', '-b:a', '160k', '-ac', '2');
   else args.push('-an');
-  args.push('-t', String(edit.duration), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-map_metadata', '-1', '-progress', 'pipe:1', '-nostats', '-f', 'mp4', outputPath);
+  args.push('-t', String(edit.duration), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-map_metadata', '-1');
+  if (edit.outputLicenseUrl) args.push('-metadata', `comment=Adaptação Slow View TV: trecho ${edit.start}s–${edit.end}s, fades e áudio conforme seleção. Licença: ${edit.outputLicenseUrl}. ${edit.sources.map(source => `${source.attribution} | ${source.sourceUrl}`).join('; ')}`);
+  args.push('-progress', 'pipe:1', '-nostats', '-f', 'mp4', outputPath);
   await new Promise((resolve, reject) => {
     const child = spawn(ffmpeg, args, { stdio: ['ignore', 'pipe', 'pipe'], signal });
     let buffered = '';

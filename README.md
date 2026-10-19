@@ -11,6 +11,7 @@ O protótipo procedural anterior foi preservado em `/prototype`, com seus dados 
 ## Filmagens reais
 
 - Biblioteca de MP4/WebM e áudio MP3/WAV, com origem, créditos, licença e conferência de direitos.
+- [Importação da Flåmsbanen/NRK no RunPod](docs/nrk-flamsbanen-pilot.md), com pausa/retomada e créditos CC BY-SA; disponibilidade do vídeo depende das fontes do torrent, ainda não comprovadas no Pod.
 - Envio de arquivos ou importação de links diretos dos CDNs Pexels/Pixabay. Busca Pexels quando configurada; links de páginas e do YouTube não são arquivos importáveis.
 - Seleção de um trecho de 3 segundos a 1 hora; exportação H.264 na cadência original em HD, Full HD ou 4K, sem ampliar a fonte.
 - Entrada e saída suaves, áudio original nivelado, faixa ambiente opcional ou silêncio; créditos preservados por edição.

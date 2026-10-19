@@ -5,7 +5,7 @@ import { footageApi, mediaUrl, type FootageAsset, type FootageEdit, type Footage
 import { TrainLibrary } from './TrainLibrary';
 import './footage.css';
 
-const licenses: Record<string, string> = { own: 'Filmagem ou áudio próprio', cc0: 'CC0 / domínio público', pexels: 'Licença Pexels', pixabay: 'Licença Pixabay', permission: 'Autorização do titular' };
+const licenses: Record<string, string> = { own: 'Filmagem ou áudio próprio', cc0: 'CC0 / domínio público', pexels: 'Licença Pexels', pixabay: 'Licença Pixabay', permission: 'Autorização do titular', 'cc-by-sa-3.0': 'CC BY-SA 3.0', 'cc-by-sa-3.0-no': 'CC BY-SA 3.0 Noruega' };
 const blankMetadata: MediaMetadata = { title: '', license: 'own', sourceUrl: '', attribution: '', licenseNotes: '', rightsConfirmed: false };
 const time = (value = 0) => `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}`;
 const statuses: Record<FootageExport['status'], string> = { queued: 'Na fila', editing: 'Editando', completed: 'Pronto para assistir', failed: 'Não concluído', cancelled: 'Cancelado' };
@@ -95,7 +95,7 @@ function Editor({ asset, assets, onBack, onExport, onUpdate }: { asset: FootageA
       </section>
       <section className="ft-panel ft-source"><div className="ft-panel-title"><h2>Fonte e créditos</h2><button className="ft-text-button" onClick={() => setEditingSource(!editingSource)}>{editingSource ? 'Fechar' : 'Editar dados'}</button></div>
         {editingSource ? <form onSubmit={e => void saveSource(e)}><MetadataFields value={metadata} onChange={setMetadata} /><button className="ft-button" disabled={busy}>Salvar dados da fonte</button></form>
-          : <><p>{licenses[asset.license]} · {asset.rightsConfirmed ? 'Licença conferida por você' : 'Licença pendente de conferência'}</p>{asset.attribution && <p>{asset.attribution}</p>}{asset.sourceUrl && <a href={asset.sourceUrl} target="_blank" rel="noreferrer">Abrir página da fonte <ArrowUpRight size={14} /></a>}{asset.licenseNotes && <p className="ft-hint">{asset.licenseNotes}</p>}</>}
+          : <><p>{licenses[asset.license]} · {asset.rightsConfirmed ? 'Licença conferida' : 'Licença pendente de conferência'}</p>{asset.attribution && <p>{asset.attribution}</p>}{asset.sourceUrl && <a href={asset.sourceUrl} target="_blank" rel="noreferrer">Abrir página da fonte <ArrowUpRight size={14} /></a>}{asset.licenseNotes && <p className="ft-hint">{asset.licenseNotes}</p>}</>}
       </section></div>
       <form className="ft-panel ft-edit-form" onSubmit={e => void submit(e)}><h2>Preparar a edição</h2>
         <label>Nome do vídeo<input value={title} onChange={e => setTitle(e.target.value)} required maxLength={240} /></label>
@@ -107,6 +107,7 @@ function Editor({ asset, assets, onBack, onExport, onUpdate }: { asset: FootageA
         <p className="ft-hint">Uma faixa de áudio pode estar silenciosa. O nivelamento não cria sons ausentes. Quando houver som, ele recebe nivelamento e entrada e saída suaves; confira também sons repentinos ao assistir.</p>
         <label>Resolução<select value={resolution} onChange={e => setResolution(e.target.value)}>{formats.map(format => <option key={format.key} value={format.key} disabled={Math.min(format.width / (asset.width || 1), format.height / (asset.height || 1)) > 1.001}>{format.name}</option>)}</select><small>Sem ampliar artificialmente a filmagem. A proporção original é preservada, com barras quando necessário.</small></label>
         <div className="ft-soft-note"><Check size={17} /><span>Movimento na cadência original, sem cortes internos. Entrada e saída de até 1,5 segundo.</span></div>
+        {asset.license.startsWith('cc-by-sa-') && <p className="ft-hint">A edição mantém a licença CC BY-SA. Ao publicar, inclua os créditos e links do arquivo “Baixar créditos”.</p>}
         {!asset.rightsConfirmed && <p className="ft-error">Confira a licença em “Fonte e créditos” para exportar.</p>}
         {error && <p className="ft-error" role="alert">{error}</p>}
         <button className="ft-button ft-primary" disabled={busy || !asset.rightsConfirmed}><Scissors size={17} />{busy ? 'Preparando…' : 'Exportar trecho em MP4'}</button>
@@ -116,7 +117,7 @@ function Editor({ asset, assets, onBack, onExport, onUpdate }: { asset: FootageA
 }
 
 function downloadCredits(job: FootageExport) {
-  const text = [`Slow View TV — ${job.title}`, `Trecho: ${job.start}s a ${job.end}s · ${job.width} × ${job.height}`, 'Edição: corte, entrada e saída suaves; áudio conforme seleção.', '', ...job.sources.flatMap(source => [source.title, `Fonte: ${source.sourceUrl || 'Material próprio'}`, `Licença declarada: ${licenses[source.license] || source.license}`, `Créditos: ${source.attribution || 'Não informados'}`, source.licenseNotes, ''])].join('\n');
+  const text = [`Slow View TV — ${job.title}`, `Trecho: ${job.start}s a ${job.end}s · ${job.width} × ${job.height}`, 'Alterações por Slow View TV: corte, entrada e saída suaves; áudio conforme seleção.', ...(job.outputLicenseUrl ? [`Licença desta adaptação: ${licenses[job.outputLicense!] || job.outputLicense}`, job.outputLicenseUrl, 'Ao publicar online, mantenha os links abaixo clicáveis na descrição e distribua esta adaptação sob a licença indicada.'] : []), '', ...job.sources.flatMap(source => [source.title, `Fonte: ${source.sourceUrl || 'Material próprio'}`, `Licença declarada: ${licenses[source.license] || source.license}`, `Créditos: ${source.attribution || 'Não informados'}`, source.licenseNotes, ''])].join('\n');
   const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
   const link = document.createElement('a'); link.href = url; link.download = `creditos-${job.id}.txt`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -168,6 +169,7 @@ export default function FootageStudio() {
     await footageApi.edit(edit); await refresh(); setView('exports'); setNotice('Edição na fila. Você pode continuar na biblioteca enquanto ela é preparada.');
   }
   async function cancel(id: string) { try { await footageApi.cancel(id); await refresh(); } catch (err) { setError(errorMessage(err)); } }
+  async function openJourney(id: string) { try { await refresh(); setSelectedId(id); setView('edit'); } catch (err) { setError(errorMessage(err)); } }
   const videos = assets.filter(asset => asset.status === 'ready' && asset.kind === 'video').length;
   return <div className="ft-studio">
     <aside className="ft-sidebar"><a className="ft-brand" href="/"><img src="/favicon.svg" alt="" /><span>Slow View TV<small>FILMAGENS REAIS</small></span></a>
@@ -177,7 +179,7 @@ export default function FootageStudio() {
     <main className="ft-main"><div className="ft-topline"><span>Seu ateliê / {view === 'exports' ? 'Edições' : view === 'edit' ? 'Editor' : view === 'trains' ? 'Trem' : 'Biblioteca'}</span><span>Sem reprodução automática</span></div>
       {error && <div className="ft-error ft-banner" role="alert"><span>{error}</span><button className="ft-icon" onClick={() => setError('')} aria-label="Fechar aviso"><X size={18} /></button></div>}
       {notice && <p className="ft-notice" role="status">{notice}</p>}
-      {view === 'trains' ? <TrainLibrary onLibrary={() => setView('library')} /> : view === 'edit' && selected ? <Editor key={selected.id} asset={selected} assets={assets} onBack={() => setView('library')} onExport={createExport} onUpdate={refresh} /> : view === 'exports' ? <>
+      {view === 'trains' ? <TrainLibrary onLibrary={() => setView('library')} onOpenAsset={id => void openJourney(id)} /> : view === 'edit' && selected ? <Editor key={selected.id} asset={selected} assets={assets} onBack={() => setView('library')} onExport={createExport} onUpdate={refresh} /> : view === 'exports' ? <>
         <div className="ft-heading"><div><p className="ft-eyebrow">DO SEU ATELIÊ PARA O MUNDO</p><h1>Suas edições.</h1><p>Assista com calma antes de publicar. Cada vídeo guarda suas fontes.</p></div><button className="ft-button" onClick={() => setView('library')}><Plus size={17} />Escolher filmagem</button></div>
         {!exports.length && <div className="ft-empty ft-panel"><Film size={34} /><h2>Um trecho pode ser o começo.</h2><p>Escolha uma filmagem na biblioteca para preparar sua primeira edição.</p></div>}
         <div className="ft-export-list">{exports.map(job => <article className="ft-panel ft-export" key={job.id}><div className="ft-panel-title"><div><h2>{job.title}</h2><p>{time(job.duration)} · {job.height}p · {job.hasAudio ? 'Com faixa de áudio' : 'Sem faixa de áudio'}</p></div><span className={`ft-status ${job.status}`}>{statuses[job.status]}</span></div>

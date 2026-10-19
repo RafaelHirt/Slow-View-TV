@@ -4,7 +4,7 @@ O foco mudou para editar material filmado, com controle de reprodução e de áu
 
 Para a divisão entre dashboard, editor, player, CPU/GPU e fornecedores de conteúdo, consulte [a proposta de produto e produção](product-and-production.md). Mapas, legendas e montagem de vários clipes são evoluções propostas; não fazem parte do editor entregue nesta etapa.
 
-A aba **Trem** apresenta o catálogo editorial inicial de Nordlandsbanen, Flåmsbanen e Bergensbanen, com origem/destino, fonte, condições de uso e pendências. Os três registros estão **em preparação**: ainda não representam vídeos importados ou mapas sincronizados. A busca é local. A associação persistente de uma viagem aos arquivos e edições da biblioteca é uma etapa posterior.
+A aba **Trem** apresenta Nordlandsbanen, Flåmsbanen e Bergensbanen, com origem/destino, fonte e condições de uso. A Flåmsbanen tem importação pelo servidor com progresso, pausa/retomada e associação persistente ao arquivo; depende de ativação no Pod e de fontes ativas do torrent oficial. As outras viagens continuam em preparação. Não há mapa sincronizado nem obtenção do vídeo real comprovada pelos testes locais. Veja [como iniciar a primeira viagem](nrk-flamsbanen-pilot.md).
 
 ## Primeiro vídeo
 
@@ -58,10 +58,12 @@ Atualize primeiro o backend e depois o painel: um painel novo não encontra os e
 ## Limites e dados
 
 - Envio/importação padrão de até 512 MB por arquivo; `MEDIA_MAX_UPLOAD_MB` ajusta o limite até 10240 MB, conforme o disco e o proxy disponíveis.
+- A Flåmsbanen usa um importador específico no servidor, com tamanho oficial fixado em 3,76 GB e conferência de espaço; não exige aumentar o limite de envio do navegador. Requer aria2 e `MEDIA_NRK_DOWNLOADS=1`. Torrent e credenciais não são enviados em campos de importação genéricos.
 - Fontes com duração conhecida de 1 segundo a 12 horas. Trechos de 3 segundos a 1 hora. MP4/WebM, MP3/WAV; HDR é recusado para evitar alteração silenciosa de cores.
 - Exportação H.264 em 1280×720, 1920×1080 ou 3840×2160, preservando os timestamps e a cadência da fonte, a proporção e barras quando necessárias. Resoluções que ampliariam a fonte são recusadas. Não há IA de melhoria, reconstrução de detalhes ou geração de som. Fontes entrelaçadas ainda exigem preparação e revisão específicas.
 - Uma edição é processada por vez. Importações têm limite de duas transferências simultâneas. O tempo depende da CPU, resolução e duração. Não há benchmark de uma hora nem garantia de desempenho em 4K.
 - Biblioteca e saídas em `SLOWVISTA_DATA_DIR/footage/`; tabelas novas no mesmo SQLite. Reiniciar o servidor marca envios e edições incompletos como interrompidos. Não há retomada de upload ou exportação.
+- A transferência NRK preserva partes e permite retomada manual, inclusive após reinício. Isso não acrescenta retomada aos uploads pelo navegador ou às exportações FFmpeg.
 - Arquivos exigem sessão ou um link temporário limitado àquele arquivo. Esses links permitem reprodução e HTTP Range; expiram e mudam após reiniciar o servidor. Créditos da edição são uma cópia dos dados da fonte no momento da exportação.
 - Use uma instância por banco, backup consistente com o serviço encerrado e espaço suficiente para originais mais saídas. Os originais usados em edições são preservados.
 
