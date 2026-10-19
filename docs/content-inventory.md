@@ -1,6 +1,6 @@
 # Inventário para biblioteca e programação
 
-Pesquisa de 19/10/2026. Este inventário registra fontes e condições consultadas, não um catálogo já importado no painel. A nova versão do backend ainda depende da atualização do Pod pelo usuário; não há transmissão YouTube configurada.
+Pesquisa de 19/10/2026. Este inventário registra fontes e condições consultadas, não um catálogo de viagens longas já importado no painel. O usuário confirmou por capturas a instalação do novo editor no Pod, a importação da amostra Pexels de trem e a exportação de 20 segundos/720p com áudio, aberta no player sem distrações. Isso valida o fluxo básico naquele Pod; não aprova a qualidade editorial, o áudio ouvido ou as viagens longas. Não há transmissão YouTube configurada.
 
 ## Produto definido com o usuário
 
