@@ -6,6 +6,7 @@ import { fetch as proxyFetch, ProxyAgent } from 'undici';
 import { HttpError } from './validation.mjs';
 import { probeMedia } from './footage-media.mjs';
 import { inspectTorrent, sameTorrentContent } from './torrent-metadata.mjs';
+import { verifyTorrentFile } from './torrent-integrity.mjs';
 
 // Only this reviewed, single-file content is accepted. No user-supplied torrent,
 // URL, path, tracker or command can be passed to the downloader.
@@ -17,6 +18,11 @@ export const FLAMSBANEN = Object.freeze({
   infoHash: '218fafb2d888ad44e217f13e96c722bf4fd83920',
   pieceLength: 262144, piecesSha256: 'd2ef10b5c5c66468c716b00e0c9c056be3971f517b789626de2e33caa8f67326',
   mirrorUrl: 'https://trainfulness.nytsoi.net/torrents/flamsbanen.hele.turen.1920x1080.h264.Nrk.mp4.torrent',
+  // Observed in the user's Pod report on 20 Oct 2026. This authenticates the
+  // selected public metadata, not the video: original NRK pieces are checked
+  // against the complete received file before it can reach the library.
+  mirrorTorrentSha256: '4fb5439c33f23538bbcc81a35783d062d630e1a7b117a91e4b4da3b987f75bfc',
+  mirrorInfoHash: '274c4aeb18ad41ec8b343520152d9396ff06ce50', mirrorPieceLength: 2097152,
   sourceUrl: 'https://nrkbeta.no/2010/09/03/last-ned-flaamsbana-i-2d-og-3d/',
   license: 'cc-by-sa-3.0-no', licenseUrl: 'https://creativecommons.org/licenses/by-sa/3.0/no/',
   attribution: '“Flåmsbanen” – NRK · http://nrkbeta.no/ · http://nrkbeta.no/bergensbanen',
@@ -106,7 +112,12 @@ export function validateFlamsbanenMirror(bytes, reference = FLAMSBANEN) {
   let info;
   try { info = inspectTorrent(bytes); }
   catch { throw new HttpError(502, 'O espelho não retornou metadados válidos de arquivo único. Nenhuma transferência foi iniciada.'); }
-  if (!sameTorrentContent(info, reference) || info.filename !== reference.filename) throw new HttpError(502, 'O espelho não descreve o mesmo vídeo oficial da Flåmsbanen. A transferência foi bloqueada; as partes existentes foram preservadas.');
+  if (info.bytes !== reference.bytes) throw new HttpError(502, `O tamanho descrito pelo espelho (${info.bytes} bytes) difere do oficial (${reference.bytes} bytes). A transferência foi bloqueada; as partes existentes foram preservadas.`);
+  if (info.filename !== reference.filename) throw new HttpError(502, 'O nome do arquivo no espelho difere do selecionado. A transferência foi bloqueada; as partes existentes foram preservadas.');
+  const pinnedMirror = info.metadataSha256 === reference.mirrorTorrentSha256 && info.infoHash === reference.mirrorInfoHash && info.pieceLength === reference.mirrorPieceLength;
+  if (!sameTorrentContent(info, reference) && !pinnedMirror) throw new HttpError(502, info.pieceLength !== reference.pieceLength
+    ? 'O espelho usa outra divisão em partes e seus metadados não correspondem à fonte selecionada. Nenhuma transferência foi iniciada.'
+    : 'Os hashes das partes do espelho diferem dos oficiais e da fonte selecionada. A transferência foi bloqueada; as partes existentes foram preservadas.');
   if (info.privateTorrent) throw new HttpError(502, 'O torrent do espelho também é privado. Ele precisa ser conferido antes de substituir a fonte anterior.');
   if (info.hasWebSeeds) throw new HttpError(502, 'O espelho contém fontes HTTP adicionais ainda não conferidas. Nenhuma transferência foi iniciada.');
   return info;
@@ -135,30 +146,30 @@ export async function stageNrkTorrent({ directory, bytes, info, signal }) {
   return { torrent, resumeRechecked };
 }
 
-export async function downloadNrkTorrent({ directory, signal, onProgress, onDiagnostic = () => {}, fetchImpl, binary = 'aria2c', source = 'mirror' }) {
+export async function downloadNrkTorrent({ directory, signal, onProgress, onDiagnostic = () => {}, onVerification = () => {}, fetchImpl, binary = 'aria2c', source = 'mirror', preset = FLAMSBANEN }) {
   if (!['mirror', 'official'].includes(source)) throw new HttpError(400, 'Fonte NRK não reconhecida.');
   const mirror = source === 'mirror';
   const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
   const dispatcher = !fetchImpl && proxy ? new ProxyAgent(proxy) : null;
-  try {
+  async function fetchMetadata(url, useMirror) {
     let response;
     try {
-      const original = new URL(mirror ? FLAMSBANEN.mirrorUrl : FLAMSBANEN.torrentUrl);
+      const original = new URL(url);
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(30000)]);
       let current = original;
       for (let redirects = 0; ; redirects++) {
         response = await (fetchImpl || proxyFetch)(current.href, {
-          signal: requestSignal, redirect: mirror ? 'manual' : 'error', ...(dispatcher ? { dispatcher } : {}),
+          signal: requestSignal, redirect: useMirror ? 'manual' : 'error', ...(dispatcher ? { dispatcher } : {}),
         });
-        if (!mirror || ![301, 302, 303, 307, 308].includes(response.status)) break;
+        if (!useMirror || ![301, 302, 303, 307, 308].includes(response.status)) break;
         const location = response.headers.get('location'); await response.body?.cancel();
         if (!location || redirects >= 3) throw new Error('Redirecionamento fora do limite.');
         const next = new URL(location, current);
         if (next.protocol !== 'https:' || next.hostname !== original.hostname || next.username || next.password || next.port) throw new Error('Redirecionamento não conferido.');
         current = next;
       }
-    } catch { signal.throwIfAborted(); throw new HttpError(502, mirror ? 'Não foi possível consultar o torrent do espelho Nytsoi. Nenhuma transferência foi iniciada; as partes anteriores foram preservadas.' : 'Não foi possível obter o torrent oficial da NRK. A transferência pode ser tentada novamente.'); }
-    if (!response.ok || !response.body) { await response.body?.cancel(); throw new HttpError(502, mirror ? 'O espelho Nytsoi não disponibilizou os metadados neste momento. Tente retomar mais tarde.' : 'A NRK não disponibilizou o torrent oficial neste momento.'); }
+    } catch { signal.throwIfAborted(); throw new HttpError(502, useMirror ? 'Não foi possível consultar o torrent do espelho Nytsoi. Nenhuma transferência foi iniciada; as partes anteriores foram preservadas.' : 'Não foi possível obter o torrent oficial da NRK. A transferência pode ser tentada novamente.'); }
+    if (!response.ok || !response.body) { await response.body?.cancel(); throw new HttpError(502, useMirror ? 'O espelho Nytsoi não disponibilizou os metadados neste momento. Tente retomar mais tarde.' : 'A NRK não disponibilizou o torrent oficial neste momento.'); }
     const chunks = []; let size = 0;
     const reader = response.body.getReader();
     try {
@@ -169,18 +180,49 @@ export async function downloadNrkTorrent({ directory, signal, onProgress, onDiag
         chunks.push(value);
       }
     } finally { reader.releaseLock(); }
-    const bytes = Buffer.concat(chunks);
-    if (!mirror && createHash('sha256').update(bytes).digest('hex') !== FLAMSBANEN.torrentSha256) throw new HttpError(502, 'O torrent oficial mudou. A fonte precisa ser conferida antes de baixar.');
-    const info = mirror ? validateFlamsbanenMirror(bytes) : inspectTorrent(bytes);
+    return Buffer.concat(chunks);
+  }
+  function checkOfficial(bytes) {
+    if (createHash('sha256').update(bytes).digest('hex') !== preset.torrentSha256) throw new HttpError(502, 'O torrent oficial mudou. A fonte precisa ser conferida antes de baixar.');
+    const info = inspectTorrent(bytes);
+    if (!sameTorrentContent(info, preset)) throw new HttpError(502, 'A referência de partes oficiais precisa ser conferida. Nenhuma transferência foi iniciada.');
+    return bytes;
+  }
+  try {
+    const bytes = await fetchMetadata(mirror ? preset.mirrorUrl : preset.torrentUrl, mirror);
+    const info = mirror ? validateFlamsbanenMirror(bytes, preset) : inspectTorrent(checkOfficial(bytes));
+    let officialBytes = mirror ? null : bytes;
+    if (mirror) {
+      const cached = join(directory, 'source.torrent');
+      try { if ((await stat(cached)).size <= 500000) officialBytes = checkOfficial(await readFile(cached)); }
+      catch (error) { if (error instanceof HttpError || (error.code && error.code !== 'ENOENT')) throw error; }
+      if (!officialBytes) {
+        officialBytes = checkOfficial(await fetchMetadata(preset.torrentUrl, false));
+        await writeFile(`${cached}.next`, officialBytes, { mode: 0o600 }); await rename(`${cached}.next`, cached);
+      }
+    }
     const { torrent, resumeRechecked } = await stageNrkTorrent({ directory, bytes, info, signal });
-    const sourceInfo = { source: mirror ? 'nytsoi' : 'nrk', contentVerified: true, privateTorrent: info.privateTorrent, resumeRechecked };
-    await runAriaDownload({ directory, torrent, signal, onProgress,
+    const sourceInfo = { source: mirror ? 'nytsoi' : 'nrk', contentVerified: false, privateTorrent: info.privateTorrent, resumeRechecked,
+      verification: 'pending', verifiedBytes: 0, verificationTotal: preset.bytes };
+    const diagnostic = await runAriaDownload({ directory, torrent, signal, onProgress,
       onDiagnostic: value => onDiagnostic({ ...value, ...sourceInfo }), binary });
     // A stopped torrent can leave a full-sized sparse file. Length alone is not
     // proof of completion: aria2 must also have removed its resume control file.
-    const path = join(directory, FLAMSBANEN.filename);
+    const path = join(directory, preset.filename);
     const pending = await stat(`${path}.aria2`).then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; });
-    if (pending || (await stat(path)).size !== FLAMSBANEN.bytes) throw new HttpError(502, 'O download ainda está incompleto. Retome a transferência para conferir todas as partes.');
+    if (pending || (await stat(path)).size !== preset.bytes) throw new HttpError(502, 'O download ainda está incompleto. Retome a transferência para conferir todas as partes.');
+    signal.throwIfAborted(); onVerification(); sourceInfo.verification = 'checking';
+    try {
+      const proof = await verifyTorrentFile(path, officialBytes, { signal, onProgress: progress => {
+        sourceInfo.verifiedBytes = progress.verified; onDiagnostic({ ...diagnostic, ...sourceInfo });
+      } });
+      sourceInfo.verification = 'passed'; sourceInfo.contentVerified = true;
+      onDiagnostic({ ...diagnostic, ...sourceInfo, fileSha256: proof.fileSha256 });
+    } catch (error) {
+      sourceInfo.verification = signal.aborted ? 'paused' : 'failed';
+      onDiagnostic({ ...diagnostic, ...sourceInfo, reason: signal.aborted ? 'paused' : 'official_integrity' });
+      throw error;
+    }
     return path;
   } finally { await dispatcher?.close(); }
 }
@@ -241,6 +283,7 @@ export async function createNrkIngest({ db, directory, newAsset, getAsset, publi
           // registration from that verified file without downloading it again.
           const existing = await stat(finalPath).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
           const sourcePath = existing?.size === FLAMSBANEN.bytes ? finalPath : await download({ directory: staging, signal: controller.signal,
+            onVerification: () => update('verifying'),
             onDiagnostic: value => db.prepare('UPDATE footage_downloads SET diagnostics=? WHERE source_id=?').run(JSON.stringify(value), FLAMSBANEN.id),
             onProgress: progress => {
               if (Number.isSafeInteger(progress.completed) && progress.completed >= 0 && progress.completed <= FLAMSBANEN.bytes && progress.total === FLAMSBANEN.bytes) db.prepare('UPDATE footage_downloads SET completed=? WHERE source_id=?').run(progress.completed, FLAMSBANEN.id);

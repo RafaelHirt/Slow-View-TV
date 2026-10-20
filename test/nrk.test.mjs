@@ -59,7 +59,7 @@ function encodeTorrent(value) {
   return Buffer.concat([Buffer.from('d'), ...Object.keys(value).sort().flatMap(key => [encodeTorrent(key), encodeTorrent(value[key])]), Buffer.from('e')]);
 }
 
-test('public mirror must describe identical parts, a safe fixed filename and a public single-file torrent', async t => {
+test('unselected public metadata cannot bypass official parts, the fixed filename or source restrictions', async t => {
   // Technical metadata only: the reference here is a tiny invented file, not a
   // substitute for the production NRK fingerprint or a real mirror response.
   const info = { name: FLAMSBANEN.filename, length: 1024, 'piece length': 512, pieces: Buffer.alloc(40, 7), private: 1 };
@@ -67,7 +67,7 @@ test('public mirror must describe identical parts, a safe fixed filename and a p
   const publicInfo = { ...info, private: 0 }, bytes = encodeTorrent({ info: publicInfo });
   assert.equal(validateFlamsbanenMirror(bytes, reference).privateTorrent, false);
   assert.equal(validateFlamsbanenMirror(encodeTorrent({ info: publicInfo, 'url-list': [] }), reference).hasWebSeeds, false);
-  assert.throws(() => validateFlamsbanenMirror(bytes), /mesmo vídeo oficial/);
+  assert.throws(() => validateFlamsbanenMirror(bytes), /tamanho descrito pelo espelho/);
   for (const changes of [{ pieces: Buffer.alloc(40, 8) }, { length: 1023 }, { name: '../file.mp4' }, { files: [] }, { 'name.utf-8': '../file.mp4' }, { 'symlink path': ['..', 'file.mp4'] }]) assert.throws(() => validateFlamsbanenMirror(encodeTorrent({ info: { ...publicInfo, ...changes } }), reference));
   assert.throws(() => validateFlamsbanenMirror(encodeTorrent({ info }), reference), /também é privado/);
   assert.throws(() => validateFlamsbanenMirror(encodeTorrent({ info: publicInfo, 'url-list': 'https://unreviewed.invalid/video.mp4' }), reference), /HTTP adicionais/);
@@ -75,7 +75,7 @@ test('public mirror must describe identical parts, a safe fixed filename and a p
   await writeFile(join(directory, FLAMSBANEN.filename), 'existing partial media');
   await assert.rejects(downloadNrkTorrent({ directory, signal: new AbortController().signal, binary: 'must-never-start', fetchImpl: async (url, options) => {
     assert.equal(url, FLAMSBANEN.mirrorUrl); assert.equal(options.redirect, 'manual'); return new Response(bytes);
-  } }), /mesmo vídeo oficial/);
+  } }), /tamanho descrito pelo espelho/);
   assert.equal(await readFile(join(directory, FLAMSBANEN.filename), 'utf8'), 'existing partial media');
   assert.deepEqual(await readdir(directory), [FLAMSBANEN.filename]);
 });

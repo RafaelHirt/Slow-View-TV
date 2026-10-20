@@ -1,8 +1,8 @@
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fetch, ProxyAgent } from 'undici';
-import { FLAMSBANEN } from '../server/nrk-ingest.mjs';
-import { inspectTorrent, sameTorrentContent } from '../server/torrent-metadata.mjs';
+import { FLAMSBANEN, validateFlamsbanenMirror } from '../server/nrk-ingest.mjs';
+import { inspectTorrent, compareTorrentMetadata } from '../server/torrent-metadata.mjs';
 import { inspectNrkMirrorIndex } from '../server/nrk-source-index.mjs';
 
 // Metadata only. Does not start P2P, download video, access the DB/password,
@@ -43,17 +43,17 @@ try {
   } catch (error) { report.official = failure(error); }
   const [directMirror, mirror, tracker] = await Promise.allSettled([
     (async () => {
-      const info = inspectTorrent(await get(FLAMSBANEN.mirrorUrl));
-      const contentMatchesOfficial = sameTorrentContent(FLAMSBANEN, info);
-      return { url: FLAMSBANEN.mirrorUrl, metadataAvailable: true, ...info, contentMatchesOfficial,
-        importEligible: contentMatchesOfficial && info.filename === FLAMSBANEN.filename && !info.privateTorrent && !info.hasWebSeeds,
-        note: 'Endereço exato informado pelo usuário. Conferência contra a impressão das partes oficiais já registrada no projeto. Não verifica peers nem inicia download.' };
+      const bytes = await get(FLAMSBANEN.mirrorUrl), info = inspectTorrent(bytes), comparison = compareTorrentMetadata(FLAMSBANEN, info);
+      let importEligible = false;
+      try { validateFlamsbanenMirror(bytes); importEligible = true; } catch { /* report the comparison without approving */ }
+      return { url: FLAMSBANEN.mirrorUrl, metadataAvailable: true, ...info, ...comparison, importEligible, officialVerificationRequired: true,
+        note: 'Partições diferentes não permitem comparar diretamente os hashes. A fonte pública selecionada pode ser transferida, mas o arquivo deve passar por todas as partes oficiais NRK antes de entrar na biblioteca. Não verifica peers nem inicia download.' };
     })(),
     (async () => {
       const html = (await get(mirrorPage)).toString('utf8'), index = inspectNrkMirrorIndex(html, mirrorPage);
       const eligible = index.torrentLinks.filter(link => link.canInspect).slice(0, 8);
       const candidates = await Promise.all(eligible.map(async link => {
-        try { const info = inspectTorrent(await get(link.fetchUrl)); return { url: link.fetchUrl, metadataAvailable: true, ...info, contentMatchesOfficial: sameTorrentContent(FLAMSBANEN, info) }; }
+        try { const info = inspectTorrent(await get(link.fetchUrl)); return { url: link.fetchUrl, metadataAvailable: true, ...info, ...compareTorrentMetadata(FLAMSBANEN, info) }; }
         catch (error) { return { url: link.fetchUrl, ...failure(error) }; }
       }));
       return { pageFetched: true, page: mirrorPage, ...index, candidates,

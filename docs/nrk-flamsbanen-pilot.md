@@ -9,9 +9,22 @@ O painel Netlify aciona uma transferência no RunPod existente. O navegador não
 - [Torrent oficial](https://nrkbeta.no/torrent/Flamsbanen.hele.turen.1920x1080.h264.NRK.torrent). SHA-256 dos metadados obtidos na pesquisa: `31c95678c89a16bd1d65abfe73a14f93193038aeb2c007a432db00e01b758475`; info hash: `218fafb2d888ad44e217f13e96c722bf4fd83920`.
 - [CC BY-SA 3.0 Noruega](https://creativecommons.org/licenses/by-sa/3.0/no/). A publicação exige crédito NRK, links na descrição online, indicação das alterações e distribuição das adaptações sob as condições da licença. O texto menciona tanto `http://nrkbeta.no/` quanto `http://nrkbeta.no/bergensbanen`; ambos são preservados no crédito, além da página específica da Flåmsbanen.
 
-O conteúdo aceito continua sendo apenas esse vídeo. O torrent oficial mantém a verificação de SHA-256. Depois da tentativa sem transferência, o usuário forneceu o [endereço exato do espelho Nytsoi](https://trainfulness.nytsoi.net/torrents/flamsbanen.hele.turen.1920x1080.h264.Nrk.mp4.torrent), que passou a ser a fonte consultada ao retomar. Antes de acionar aria2, o servidor exige arquivo único, nome idêntico, **3.763.728.590 bytes**, partes de **262.144 bytes** e SHA-256 da lista completa de hashes de partes **`d2ef10b5c5c66468c716b00e0c9c056be3971f517b789626de2e33caa8f67326`**, conferido contra os metadados oficiais já obtidos. Também exige torrent público, sem fontes HTTP adicionais e sem nomes alternativos ou links de arquivo. Não modifica o campo privado do torrent oficial.
+O conteúdo aceito continua sendo apenas esse vídeo. O torrent oficial mantém a verificação de SHA-256. Depois da tentativa sem transferência, o usuário forneceu o [endereço exato do espelho Nytsoi](https://trainfulness.nytsoi.net/torrents/flamsbanen.hele.turen.1920x1080.h264.Nrk.mp4.torrent), que passou a ser a fonte consultada ao retomar. Antes de acionar aria2, o servidor exige arquivo único, nome idêntico, **3.763.728.590 bytes**, torrent público sem fontes HTTP adicionais, nomes alternativos ou links de arquivo. Os metadados devem ter as mesmas partes oficiais ou coincidir com o perfil específico do espelho conferido no relatório do Pod de 20/10/2026. Não modifica o campo privado do torrent oficial.
 
-Um info hash diferente é esperado quando o publicador altera os metadados de privacidade; isso só é aceito se o conteúdo descrito coincidir integralmente. O endereço é fixo no servidor. Links arbitrários, caminhos e opções de shell não podem ser enviados pelo painel. Falha na consulta ou na conferência encerra a tentativa antes do P2P e preserva os arquivos existentes. Não há retorno automático ao torrent privado que já ficou sem transferência. Isso é uma autorização condicionada à validação no Pod, **não uma afirmação de que o espelho foi obtido ou que tem peers**.
+O relatório confirmou uma diferença que o comparador anterior tratava incorretamente como prova de conteúdo diferente:
+
+| Metadado | Oficial NRK | Espelho Nytsoi |
+| --- | --- | --- |
+| Nome e tamanho | `flamsbanen.hele.turen.1920x1080.h264.Nrk.mp4`, 3.763.728.590 bytes | Iguais |
+| Tamanho de cada parte | 262.144 bytes (256 KiB) | 2.097.152 bytes (2 MiB) |
+| Privado | Sim | Não |
+| Info hash | `218fafb2d888ad44e217f13e96c722bf4fd83920` | `274c4aeb18ad41ec8b343520152d9396ff06ce50` |
+
+O SHA-256 dos metadados do espelho observado no Pod é **`4fb5439c33f23538bbcc81a35783d062d630e1a7b117a91e4b4da3b987f75bfc`**. Esse perfil específico permite tentar a transferência; não autentica o vídeo perante a NRK. Hashes de partes de 2 MiB não podem ser comparados diretamente com hashes de partes de 256 KiB. `contentMatchesOfficial` é `null` nessa situação, em vez da conclusão indevida `false`.
+
+**Depois de aria2 concluir, o servidor lê o arquivo inteiro e confere, uma a uma, as partes originais de 262.144 bytes**, incluindo a última parte menor. A lista oficial mantém SHA-256 **`d2ef10b5c5c66468c716b00e0c9c056be3971f517b789626de2e33caa8f67326`** e vem do torrent com SHA-256 fixado acima, reutilizado do cache ou obtido e validado na NRK. O vídeo só pode sair da área de preparação depois dessa conferência. Um único byte divergente bloqueia a importação mesmo se corresponder ao torrent público. Os dados recebidos permanecem preservados. A leitura usa memória limitada, atualiza o progresso no painel e pode ser pausada; uma retomada refaz a conferência.
+
+O endereço é fixo no servidor. Links arbitrários, caminhos e opções de shell não podem ser enviados pelo painel. Falha na obtenção ou autenticação dos metadados impede o P2P. Não há retorno automático ao torrent privado que já ficou sem transferência. O relatório confirma **obtenção dos metadados pelo Pod**, mas ainda não confirma peers ou obtenção do vídeo real.
 
 ## Atualizar o Pod existente
 
@@ -40,7 +53,8 @@ Depois de a aplicação iniciar, atualize a página do painel e abra **Trem**. A
 - O painel mostra bytes recebidos, pausa e retomada. Pode ser fechado enquanto o servidor continua ligado. Pausar preserva as partes; reiniciar o servidor exige clicar em **Retomar**, sem início automático.
 - Cada tentativa tem limite de uma hora e encerra após 180 segundos consecutivos sem transferência. Há limites de velocidade de 20 MiB/s de download e 512 KiB/s de upload; não mantém seeding após concluir. O servidor precisa de conectividade BitTorrent para os peers, além do acesso HTTPS à NRK.
 - **Não há garantia de peers ativos.** Falta de fontes não significa falha de login ou que a aplicação precisa de outra GPU. O painel informa a falha e preserva as partes para uma nova tentativa.
-- O arquivo só fica pronto depois de aria2 concluir e conferir as partes, não haver controle de transferência pendente, o tamanho coincidir e FFprobe reconhecer vídeo 1920×1080 válido. A presença de faixa de áudio continua sem provar som audível.
+- O arquivo só fica pronto depois de aria2 concluir e conferir as partes públicas, não haver controle de transferência pendente, o tamanho coincidir, **todas as partes oficiais NRK passarem na leitura integral** e FFprobe reconhecer vídeo 1920×1080 válido. A presença de faixa de áudio continua sem provar som audível.
+- Ao concluir a transferência, o painel muda para **Conferindo com a referência NRK**, com progresso próprio. A conferência lê 3,76 GB do disco e pode levar alguns minutos conforme o volume. O diagnóstico só registra conteúdo integralmente conferido depois dessa etapa; também guarda o SHA-256 do arquivo recebido. Não abrir outra instância para tentar acelerar a leitura.
 
 ## Primeira amostra
 
@@ -66,7 +80,7 @@ git pull --ff-only origin main &&
 npm run check:nrk-sources
 ```
 
-O comando não abre o banco, não lê a senha, não baixa vídeo, não inicia P2P e não altera a biblioteca. Reutiliza o torrent oficial já obtido no Pod, conferindo seu SHA-256 e info hash. Consulta diretamente o endereço Nytsoi informado pelo usuário, mesmo se a página de índice falhar. `directMirror.contentMatchesOfficial` compara os hashes com a referência fixada; `importEligible` também exige as condições acima. Esses campos não demonstram disponibilidade do vídeo.
+O comando não abre o banco, não lê a senha, não baixa vídeo, não inicia P2P e não altera a biblioteca. Reutiliza o torrent oficial já obtido no Pod, conferindo seu SHA-256 e info hash. Consulta diretamente o endereço Nytsoi informado pelo usuário, mesmo se a página de índice falhar. `directMirror` distingue nome/tamanho coincidentes e `samePartition`. Com partições diferentes, `contentMatchesOfficial` fica `null`; `importEligible` indica somente que a fonte pode ser tentada e `officialVerificationRequired` permanece verdadeiro. Esses campos não demonstram disponibilidade ou identidade do vídeo.
 
 O verificador anterior procurava apenas links no domínio `blog.nytsoi.net`; o arquivo está em `trainfulness.nytsoi.net`. Esse erro de descoberta foi corrigido. O relatório agora distingue `metadataAvailable`, `pageFetched` e a consulta HTTP ao rastreador, apresenta links de outros hosts para revisão e reconhece magnets sem iniciar P2P. Não confundir página acessível com vídeo disponível. O espelho é citado por um leitor nos comentários da [publicação NRK de 2018](https://nrkbeta.no/2018/02/13/hva-skjedde-med-bittorrent/) e não é hospedagem oficial.
 
@@ -78,6 +92,7 @@ Testes usam mídia técnica isolada, inclusive um MP4 esparso com o tamanho espe
 
 ```sh
 node --test test/nrk.test.mjs
+node --test test/torrent-integrity.test.mjs
 npm run build
 CHROMIUM_NO_SANDBOX=1 npm run test:nrk
 ```
@@ -89,3 +104,7 @@ Validação inicial em 19/10/2026: **65/65** testes da suíte geral passaram, as
 aria2 **1.37.0** real foi obtido de pacotes Debian com verificação APT, extraído em diretório temporário e executado localmente: a mesma lista de opções foi aceita ao inspecionar o torrent oficial; uma transferência HTTP exclusivamente em localhost validou as linhas reais de progresso. Isso não exercita trackers nem peers externos. Na pesquisa deste ambiente, o HTTPS NRK recebeu HTTP 403, o espelho teve CONNECT 403 do proxy e a consulta HTTP ao rastreador recebeu 403; não extrapolar esses resultados para a rede do Pod. Nenhum vídeo NRK real foi recebido no ambiente Codex.
 
 A atualização do espelho foi testada com metadados técnicos inventados: aceita partes idênticas sob outro info hash; rejeita conteúdo, nomes, torrents privados e fontes HTTP não conferidos; preserva o vídeo e o controle anterior na troca. Um aria2 real também conferiu um arquivo técnico já existente e concluiu sem alterá-lo, com DHT, LPD e troca de peers desativados e sem rastreadores. Isso verifica a retomada por integridade, não o espelho ou peers reais. O endereço exato Nytsoi também recebeu CONNECT 403 neste ambiente; sua obtenção e validação reais continuam a depender da execução no Pod.
+
+A correção do particionamento usa arquivos técnicos com partes de 256 KiB no original e 2 MiB no espelho. Exercita a leitura integral, última parte menor, metadados oficiais adulterados, pausa e um arquivo que passa no torrent público mas difere em um byte do original: este é rejeitado. O navegador mantém a viagem fora da biblioteca enquanto mostra a conferência em andamento. Esses testes não comprovam a identidade do vídeo real ainda não recebido.
+
+O fluxo atualizado também foi executado com **aria2 real** e arquivo técnico local já completo: metadados originais com partes de 16 KiB e públicos com partes de 128 KiB, com todos os meios de descoberta externos desativados e sem rastreadores. aria2 terminou com código 0; a conferência posterior das partes originais passou e os 163.857 bytes permaneceram inalterados. Nenhuma fonte externa ou filmagem NRK real foi recebida nesse teste.

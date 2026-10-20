@@ -57,6 +57,8 @@ export function TrainLibrary({ onLibrary, onOpenAsset }: { onLibrary: () => void
     finally { setBusy(false); }
   }
   const download = nrk?.download, transferring = download && ['downloading', 'verifying'].includes(download.status);
+  const checkingOriginal = download?.status === 'verifying' && download.diagnostics?.verification === 'checking';
+  const verifiedPercent = Math.floor((download?.diagnostics?.verifiedBytes || 0) / Math.max(1, download?.diagnostics?.verificationTotal || 1) * 100);
   const importLabels = { downloading: 'Baixando', verifying: 'Conferindo arquivo', paused: 'Pausado', failed: 'Download pendente', ready: 'Na biblioteca' };
   const visible = journeys.filter(journey => searchable(`${journey.name} ${journey.origin} ${journey.destination} ${journey.country} ${journey.train}`).includes(searchable(query.trim())));
   return <>
@@ -77,13 +79,14 @@ export function TrainLibrary({ onLibrary, onOpenAsset }: { onLibrary: () => void
       {journey.id === 'flamsbanen' && <div className="ft-train-import">
         <p>Primeira viagem · arquivo 2D Full HD de 3,76 GB. Baixado diretamente no RunPod, sem passar pelo seu computador.</p>
         {download?.status === 'ready' && download.assetId ? <button className="ft-button ft-primary" onClick={() => onOpenAsset(download.assetId!)}>Abrir viagem e preparar amostra <ArrowRight size={15} /></button> : <>
-          {transferring && <><progress max={download.total} value={download.completed} aria-label="Download da Flåmsbanen" /><p role="status">{download.status === 'verifying' ? 'Conferindo o arquivo recebido…' : `${Math.floor(download.completed / download.total * 100)}% · ${(download.completed / 1e9).toFixed(2).replace('.', ',')} de 3,76 GB. ${download.completed === 0 ? 'Procurando fontes do arquivo…' : 'O download continua enquanto o servidor estiver ligado.'}`}</p></>}
+          {transferring && <><progress max={checkingOriginal ? download.diagnostics!.verificationTotal : download.total} value={checkingOriginal ? download.diagnostics!.verifiedBytes : download.completed} aria-label={checkingOriginal ? 'Conferência com a referência NRK' : 'Download da Flåmsbanen'} /><p role="status">{checkingOriginal ? `Conferindo com a referência NRK · ${verifiedPercent}%` : download.status === 'verifying' ? 'Conferindo o arquivo recebido…' : `${Math.floor(download.completed / download.total * 100)}% · ${(download.completed / 1e9).toFixed(2).replace('.', ',')} de 3,76 GB. ${download.completed === 0 ? 'Procurando fontes do arquivo…' : 'O download continua enquanto o servidor estiver ligado.'}`}</p></>}
           <button className="ft-button ft-primary" disabled={busy || !nrk?.available} onClick={() => void transfer(Boolean(transferring))}>{transferring ? <Pause size={15} /> : <Download size={15} />}{busy ? 'Aguarde…' : transferring ? 'Pausar download' : download ? 'Retomar download no RunPod' : 'Baixar viagem no RunPod'}</button>
           {nrk && !nrk.available && <p>Atualize e ative a importação no RunPod para começar.</p>}
         </>}
         {(error || loadError || download?.error) && <p className="ft-error" role="alert">{error || loadError || download?.error}</p>}
         {download?.diagnostics && <details className="ft-download-diagnostics"><summary>Diagnóstico da tentativa</summary><dl>
-          {download.diagnostics.source && <div><dt>Fonte da transferência</dt><dd>{download.diagnostics.source === 'nytsoi' ? 'Espelho Nytsoi · conteúdo conferido com a NRK' : 'Torrent oficial NRK'}</dd></div>}
+          {download.diagnostics.source && <div><dt>Fonte da transferência</dt><dd>{download.diagnostics.source === 'nytsoi' ? 'Espelho Nytsoi · torrent selecionado' : 'Torrent oficial NRK'}</dd></div>}
+          {download.diagnostics.verification && <div><dt>Conferência com a referência NRK</dt><dd>{({ pending: 'Após concluir a transferência', checking: `${verifiedPercent}% das partes oficiais conferidas`, passed: 'Arquivo conferido integralmente', failed: 'Arquivo rejeitado na conferência', paused: 'Conferência pausada' })[download.diagnostics.verification]}</dd></div>}
           {download.diagnostics.privateTorrent !== undefined && <div><dt>Descoberta de fontes</dt><dd>{download.diagnostics.privateTorrent ? 'Torrent privado · depende dos rastreadores' : 'Torrent público · permite descoberta DHT'}</dd></div>}
           <div><dt>Duração registrada</dt><dd>{download.diagnostics.elapsedSeconds}s</dd></div>
           <div><dt>Maior número de conexões</dt><dd>{download.diagnostics.maxConnections ?? 'Não informado pelo programa'}</dd></div>

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 // Read bounded public metadata without starting a torrent client. Keep the raw
 // info bytes for its hash; decoding/re-encoding can change that identifier.
-export function inspectTorrent(bytes) {
+export function inspectTorrent(bytes, { includePieces = false } = {}) {
   if (!Buffer.isBuffer(bytes) || bytes.length > 500000) throw new Error('Metadados fora do limite.');
   let position = 0, infoBytes;
   function read(depth = 0) {
@@ -46,9 +46,19 @@ export function inspectTorrent(bytes) {
   return { filename: info.name.toString('utf8'), bytes: info.length, pieceLength: info['piece length'], privateTorrent: info.private === 1,
     hasWebSeeds: containsSeeds(root['url-list']) || containsSeeds(root.httpseeds),
     infoHash: createHash('sha1').update(infoBytes).digest('hex'), metadataSha256: createHash('sha256').update(bytes).digest('hex'),
-    piecesSha256: createHash('sha256').update(info.pieces).digest('hex') };
+    piecesSha256: createHash('sha256').update(info.pieces).digest('hex'),
+    ...(includePieces ? { pieceHashes: Buffer.from(info.pieces) } : {}) };
 }
 
 export function sameTorrentContent(first, second) {
+  // False can mean different partitions, not different media bytes. Reports
+  // should use compareTorrentMetadata to distinguish that unknown case.
   return first.bytes === second.bytes && first.pieceLength === second.pieceLength && first.piecesSha256 === second.piecesSha256;
+}
+
+export function compareTorrentMetadata(reference, candidate) {
+  const sizeMatches = candidate.bytes === reference.bytes, samePartition = candidate.pieceLength === reference.pieceLength;
+  return { filenameMatches: candidate.filename === reference.filename, sizeMatches, samePartition,
+    // A hash of 2 MiB cannot be compared with eight hashes of 256 KiB.
+    contentMatchesOfficial: !sizeMatches ? false : samePartition ? candidate.piecesSha256 === reference.piecesSha256 : null };
 }

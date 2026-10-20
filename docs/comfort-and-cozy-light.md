@@ -14,7 +14,7 @@ O conforto depende da combinação de imagem, som e controle. Priorizar reprodu�
 
 As buscas externas desta etapa em Google, PubMed, Crossref e blog oficial YouTube receberam **CONNECT 403 do proxy deste ambiente**. Acesso completo escolhido pelo usuário na interface não alterou a lista de destinos desta instância. Não foram usados outros caminhos para contornar essa restrição.
 
-Destinos necessários para retomar a pesquisa nas configurações de rede do ambiente: `www.google.com`, `pubmed.ncbi.nlm.nih.gov`, `api.crossref.org`, `doi.org`, `blog.youtube`, `www.youtube.com` e `www.traveldojo.com`. O espelho de vídeo requer `blog.nytsoi.net` e `trainfulness.nytsoi.net`. A lista de rede já salva em rascunho não está disponível para leitura; ela não foi substituída por uma lista presumida.
+Em 20/10/2026 o novo recurso de leitura do rascunho permitiu preservar a lista existente e adicionar `www.google.com`, `pubmed.ncbi.nlm.nih.gov`, `api.crossref.org`, `doi.org`, `blog.youtube`, `www.youtube.com`, `www.traveldojo.com`, `journals.sagepub.com`, `www.sciencedirect.com`, `blog.nytsoi.net`, `trainfulness.nytsoi.net` e `tracker.torrent.nrkbeta.no`. Os domínios e instruções de inicialização foram salvos para revisão nas configurações do ambiente Codex. Exigem revisão/salvamento e publicação para valer; não alteram o Pod nem comprovam acesso atual daqui. O relatório enviado pelo usuário confirma acesso aos metadados do espelho a partir do Pod.
 
 | Afirmação | Como tratar agora |
 | --- | --- |
