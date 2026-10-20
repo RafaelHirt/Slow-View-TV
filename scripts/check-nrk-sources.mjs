@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { fetch, ProxyAgent } from 'undici';
 import { FLAMSBANEN } from '../server/nrk-ingest.mjs';
 import { inspectTorrent, sameTorrentContent } from '../server/torrent-metadata.mjs';
+import { inspectNrkMirrorIndex } from '../server/nrk-source-index.mjs';
 
 // Metadata only. Does not start P2P, download video, access the DB/password,
 // modify the catalogue, change torrent flags, or approve a mirror automatically.
@@ -27,8 +28,8 @@ async function get(url) {
   }
   throw new Error('Limite de redirecionamentos.');
 }
-const failure = error => ({ available: false, ...(Number.isInteger(error.status) ? { httpStatus: error.status } : {}), error: 'Não foi possível consultar esta fonte. Isso não comprova que o vídeo deixou de existir.' });
-const report = { checkedAt: new Date().toISOString(), official: null, mirror: null, tracker: null };
+const failure = error => ({ consulted: false, ...(Number.isInteger(error.status) ? { httpStatus: error.status } : {}), error: 'Não foi possível consultar esta fonte. Isso não comprova que o vídeo deixou de existir.' });
+const report = { checkedAt: new Date().toISOString(), scope: 'Metadados e resposta HTTP. Disponibilidade do vídeo e de peers não verificada.', official: null, directMirror: null, mirror: null, tracker: null };
 try {
   let official;
   try {
@@ -38,22 +39,26 @@ try {
     catch { bytes = await get(FLAMSBANEN.torrentUrl); }
     official = inspectTorrent(bytes);
     if (official.metadataSha256 !== FLAMSBANEN.torrentSha256 || official.infoHash !== FLAMSBANEN.infoHash) throw new Error('Torrent oficial diferente do conferido.');
-    report.official = { available: true, ...official };
+    report.official = { metadataAvailable: true, ...official };
   } catch (error) { report.official = failure(error); }
-  const [mirror, tracker] = await Promise.allSettled([
+  const [directMirror, mirror, tracker] = await Promise.allSettled([
     (async () => {
-      const html = (await get(mirrorPage)).toString('utf8'), links = new Set();
-      for (const match of html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
-        let url, path;
-        try { url = new URL(match[1].replace(/&amp;/g, '&'), mirrorPage); path = decodeURIComponent(url.pathname); } catch { continue; }
-        if (url.protocol !== 'https:' || url.hostname !== 'blog.nytsoi.net' || url.username || url.password || url.port || !/\.torrent$/i.test(path) || !/fl[aå]m/i.test(path)) continue;
-        url.search = ''; url.hash = ''; links.add(url.href);
-      }
-      const candidates = await Promise.all([...links].slice(0, 4).map(async url => {
-        try { const info = inspectTorrent(await get(url)); return { url, ...info, contentMatchesOfficial: official ? sameTorrentContent(official, info) : null }; }
-        catch (error) { return { url, ...failure(error) }; }
+      const info = inspectTorrent(await get(FLAMSBANEN.mirrorUrl));
+      const contentMatchesOfficial = sameTorrentContent(FLAMSBANEN, info);
+      return { url: FLAMSBANEN.mirrorUrl, metadataAvailable: true, ...info, contentMatchesOfficial,
+        importEligible: contentMatchesOfficial && info.filename === FLAMSBANEN.filename && !info.privateTorrent && !info.hasWebSeeds,
+        note: 'Endereço exato informado pelo usuário. Conferência contra a impressão das partes oficiais já registrada no projeto. Não verifica peers nem inicia download.' };
+    })(),
+    (async () => {
+      const html = (await get(mirrorPage)).toString('utf8'), index = inspectNrkMirrorIndex(html, mirrorPage);
+      const eligible = index.torrentLinks.filter(link => link.canInspect).slice(0, 8);
+      const candidates = await Promise.all(eligible.map(async link => {
+        try { const info = inspectTorrent(await get(link.fetchUrl)); return { url: link.fetchUrl, metadataAvailable: true, ...info, contentMatchesOfficial: sameTorrentContent(FLAMSBANEN, info) }; }
+        catch (error) { return { url: link.fetchUrl, ...failure(error) }; }
       }));
-      return { available: true, page: mirrorPage, candidates, note: 'Espelho citado por um leitor na publicação NRK de 2018; não é um servidor oficial nem uma fonte já aprovada. A comparação de hashes verifica o mesmo arquivo, não peers ativos.' };
+      return { pageFetched: true, page: mirrorPage, ...index, candidates,
+        discovery: !index.torrentLinkCount && !index.magnetLinkCount ? 'Nenhum link torrent/magnet foi reconhecido no HTML recebido; conferir título, trecho da página e links relacionados.' : index.magnetLinkCount && !eligible.length ? 'Foram encontrados magnets. É necessário obter seus metadados para comparar o arquivo; esta consulta não inicia P2P.' : 'Links encontrados; os candidatos consultados precisam corresponder ao conteúdo oficial.',
+        note: 'Espelho citado por um leitor na publicação NRK de 2018; não é um servidor oficial nem uma fonte já aprovada. A comparação de hashes verifica o mesmo arquivo, não peers ativos.' };
     })(),
     (async () => {
       const response = await fetch('http://tracker.torrent.nrkbeta.no/announce', { signal: AbortSignal.timeout(15000), redirect: 'error', ...(dispatcher ? { dispatcher } : {}) });
@@ -61,6 +66,7 @@ try {
       return { httpResponseReceived: true, httpStatus: response.status, note: 'Consulta sem anúncio de torrent. A resposta pode vir de um proxy; não verifica peers, seeders ou disponibilidade do vídeo.' };
     })(),
   ]);
+  report.directMirror = directMirror.status === 'fulfilled' ? directMirror.value : { url: FLAMSBANEN.mirrorUrl, ...failure(directMirror.reason) };
   report.mirror = mirror.status === 'fulfilled' ? mirror.value : failure(mirror.reason);
   report.tracker = tracker.status === 'fulfilled' ? tracker.value : { httpResponseReceived: false, note: 'Não foi possível receber resposta HTTP nesta consulta. A causa exata não foi confirmada.' };
   console.log(JSON.stringify(report, null, 2));

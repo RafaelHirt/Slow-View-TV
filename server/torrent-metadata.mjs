@@ -38,9 +38,13 @@ export function inspectTorrent(bytes) {
     position = start + length; return bytes.subarray(start, position);
   }
   const root = read(), info = root?.info;
-  if (position !== bytes.length || !infoBytes || !info || !Number.isSafeInteger(info.length) || info.length <= 0 || !Number.isSafeInteger(info['piece length']) || info['piece length'] <= 0 || !Buffer.isBuffer(info.pieces) || !Buffer.isBuffer(info.name)) throw new Error('Esperado um torrent de arquivo único.');
+  if (position !== bytes.length || !infoBytes || !info || info.files !== undefined || !Number.isSafeInteger(info.length) || info.length <= 0 || !Number.isSafeInteger(info['piece length']) || info['piece length'] <= 0 || !Buffer.isBuffer(info.pieces) || !Buffer.isBuffer(info.name)) throw new Error('Esperado um torrent de arquivo único.');
+  if (info['name.utf-8'] !== undefined && (!Buffer.isBuffer(info['name.utf-8']) || !info['name.utf-8'].equals(info.name))) throw new Error('Nome alternativo de arquivo requer revisão.');
+  if (info['symlink path'] !== undefined || (Buffer.isBuffer(info.attr) && info.attr.includes(108))) throw new Error('Links de arquivo não são aceitos.');
   if (info.pieces.length !== Math.ceil(info.length / info['piece length']) * 20) throw new Error('Lista de partes inconsistente.');
+  const containsSeeds = value => value === undefined ? false : Array.isArray(value) || Buffer.isBuffer(value) ? value.length > 0 : true;
   return { filename: info.name.toString('utf8'), bytes: info.length, pieceLength: info['piece length'], privateTorrent: info.private === 1,
+    hasWebSeeds: containsSeeds(root['url-list']) || containsSeeds(root.httpseeds),
     infoHash: createHash('sha1').update(infoBytes).digest('hex'), metadataSha256: createHash('sha256').update(bytes).digest('hex'),
     piecesSha256: createHash('sha256').update(info.pieces).digest('hex') };
 }

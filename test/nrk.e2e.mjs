@@ -20,7 +20,8 @@ const service = await startServer({ port: 0, dataDir: join(directory, 'data'), d
     attempts++; const path = join(staging, FLAMSBANEN.filename);
     if (attempts === 1) {
       await writeFile(path, 'isolated technical partial file'); onProgress({ completed: 1000000000, total: FLAMSBANEN.bytes });
-      onDiagnostic({ exitCode: null, signal: null, elapsedSeconds: 2, completed: 1000000000, maxConnections: 2, maxSeeders: null, trackerFailures: 0, errorCodes: [], reason: null });
+      onDiagnostic({ exitCode: null, signal: null, elapsedSeconds: 2, completed: 1000000000, maxConnections: 2, maxSeeders: null, trackerFailures: 0, errorCodes: [], reason: null,
+        source: 'nytsoi', contentVerified: true, privateTorrent: false, resumeRechecked: true });
       await new Promise((_, reject) => { const abort = () => reject(signal.reason); signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort(); });
     } else { await copyFile(fixture, path); await truncate(path, FLAMSBANEN.bytes); return path; }
   } } });
@@ -38,6 +39,8 @@ try {
   await card.getByText(/26% · 1,00 de 3,76 GB/).waitFor();
   await card.getByText('Diagnóstico da tentativa', { exact: true }).click();
   await card.getByText('Maior número de conexões', { exact: true }).locator('..').getByText('2', { exact: true }).waitFor();
+  await card.getByText('Espelho Nytsoi · conteúdo conferido com a NRK', { exact: true }).waitFor();
+  await card.getByText('Torrent público · permite descoberta DHT', { exact: true }).waitFor();
   assert.equal(attempts, 1);
   await page.screenshot({ path: join(artifacts, 'nrk-download-technical-test.png'), fullPage: true });
   await card.getByRole('button', { name: 'Pausar download' }).click();

@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { copyFile, mkdtemp, readFile, rm, stat, truncate, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, readdir, rm, stat, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { startServer } from '../server/index.mjs';
-import { FLAMSBANEN, downloadNrkTorrent, parseAriaProgress, runAriaDownload } from '../server/nrk-ingest.mjs';
+import { FLAMSBANEN, downloadNrkTorrent, parseAriaProgress, runAriaDownload, stageNrkTorrent, validateFlamsbanenMirror } from '../server/nrk-ingest.mjs';
+import { inspectTorrent } from '../server/torrent-metadata.mjs';
 import { validateMediaMetadata, validateFootageEdit } from '../server/footage-media.mjs';
 
 const execute = promisify(execFile);
@@ -42,12 +43,77 @@ test('NRK metadata requires explicit attribution and propagates share-alike to a
 
 test('official torrent changes are rejected before any peer connection', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'slowview-torrent-')); t.after(() => rm(directory, { recursive: true, force: true }));
-  await assert.rejects(downloadNrkTorrent({ directory, signal: new AbortController().signal, onProgress() {}, binary: 'must-never-start', fetchImpl: async (url, options) => {
+  await assert.rejects(downloadNrkTorrent({ directory, source: 'official', signal: new AbortController().signal, onProgress() {}, binary: 'must-never-start', fetchImpl: async (url, options) => {
     assert.equal(url, FLAMSBANEN.torrentUrl); assert.equal(options.redirect, 'error');
     return new Response('unreviewed torrent');
   } }), /torrent oficial mudou/);
   assert.deepEqual(parseAriaProgress('[#abc123 123456B/3763728590B(0%) CN:4 DL:222B]'), { completed: 123456, total: FLAMSBANEN.bytes });
   assert.equal(parseAriaProgress('No data received yet'), null);
+});
+
+function encodeTorrent(value) {
+  if (Buffer.isBuffer(value)) return Buffer.concat([Buffer.from(`${value.length}:`), value]);
+  if (typeof value === 'string') return encodeTorrent(Buffer.from(value));
+  if (typeof value === 'number') return Buffer.from(`i${value}e`);
+  if (Array.isArray(value)) return Buffer.concat([Buffer.from('l'), ...value.map(encodeTorrent), Buffer.from('e')]);
+  return Buffer.concat([Buffer.from('d'), ...Object.keys(value).sort().flatMap(key => [encodeTorrent(key), encodeTorrent(value[key])]), Buffer.from('e')]);
+}
+
+test('public mirror must describe identical parts, a safe fixed filename and a public single-file torrent', async t => {
+  // Technical metadata only: the reference here is a tiny invented file, not a
+  // substitute for the production NRK fingerprint or a real mirror response.
+  const info = { name: FLAMSBANEN.filename, length: 1024, 'piece length': 512, pieces: Buffer.alloc(40, 7), private: 1 };
+  const reference = inspectTorrent(encodeTorrent({ info }));
+  const publicInfo = { ...info, private: 0 }, bytes = encodeTorrent({ info: publicInfo });
+  assert.equal(validateFlamsbanenMirror(bytes, reference).privateTorrent, false);
+  assert.equal(validateFlamsbanenMirror(encodeTorrent({ info: publicInfo, 'url-list': [] }), reference).hasWebSeeds, false);
+  assert.throws(() => validateFlamsbanenMirror(bytes), /mesmo vídeo oficial/);
+  for (const changes of [{ pieces: Buffer.alloc(40, 8) }, { length: 1023 }, { name: '../file.mp4' }, { files: [] }, { 'name.utf-8': '../file.mp4' }, { 'symlink path': ['..', 'file.mp4'] }]) assert.throws(() => validateFlamsbanenMirror(encodeTorrent({ info: { ...publicInfo, ...changes } }), reference));
+  assert.throws(() => validateFlamsbanenMirror(encodeTorrent({ info }), reference), /também é privado/);
+  assert.throws(() => validateFlamsbanenMirror(encodeTorrent({ info: publicInfo, 'url-list': 'https://unreviewed.invalid/video.mp4' }), reference), /HTTP adicionais/);
+  const directory = await mkdtemp(join(tmpdir(), 'slowview-mirror-rejected-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, FLAMSBANEN.filename), 'existing partial media');
+  await assert.rejects(downloadNrkTorrent({ directory, signal: new AbortController().signal, binary: 'must-never-start', fetchImpl: async (url, options) => {
+    assert.equal(url, FLAMSBANEN.mirrorUrl); assert.equal(options.redirect, 'manual'); return new Response(bytes);
+  } }), /mesmo vídeo oficial/);
+  assert.equal(await readFile(join(directory, FLAMSBANEN.filename), 'utf8'), 'existing partial media');
+  assert.deepEqual(await readdir(directory), [FLAMSBANEN.filename]);
+});
+
+test('mirror redirects stay on HTTPS at the supplied host and never start peers for rejected metadata', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'slowview-mirror-redirects-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  for (const location of ['http://trainfulness.nytsoi.net/other.torrent', 'https://other.invalid/other.torrent', 'https://user:pass@trainfulness.nytsoi.net/other.torrent']) {
+    let requests = 0;
+    await assert.rejects(downloadNrkTorrent({ directory, signal: new AbortController().signal, binary: 'must-never-start', fetchImpl: async () => {
+      requests++; return new Response(null, { status: 302, headers: { location } });
+    } }), /consultar o torrent do espelho/);
+    assert.equal(requests, 1);
+  }
+  const requests = [];
+  await assert.rejects(downloadNrkTorrent({ directory, signal: new AbortController().signal, binary: 'must-never-start', fetchImpl: async url => {
+    requests.push(url); return requests.length === 1 ? new Response(null, { status: 302, headers: { location: '/moved.torrent' } }) : new Response('invalid technical metadata');
+  } }), /metadados válidos/);
+  assert.deepEqual(requests, [FLAMSBANEN.mirrorUrl, 'https://trainfulness.nytsoi.net/moved.torrent']); assert.deepEqual(await readdir(directory), []);
+});
+
+test('changing swarm preserves the old control and media; resuming the same swarm keeps its control', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'slowview-swarm-switch-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  const info = { name: FLAMSBANEN.filename, length: 1024, 'piece length': 512, pieces: Buffer.alloc(40, 9), private: 1 };
+  const original = encodeTorrent({ info }), bytes = encodeTorrent({ info: { ...info, private: 0 } });
+  const media = join(directory, FLAMSBANEN.filename), control = `${media}.aria2`;
+  await writeFile(join(directory, 'source.torrent'), original); await writeFile(media, 'existing received bytes'); await writeFile(control, 'old private swarm control');
+  const first = await stageNrkTorrent({ directory, bytes, info: inspectTorrent(bytes), signal: new AbortController().signal });
+  assert.equal(first.resumeRechecked, true);
+  assert.equal(await readFile(media, 'utf8'), 'existing received bytes');
+  const saved = (await readdir(directory)).find(name => name.startsWith(`${FLAMSBANEN.filename}.aria2.preserved-`));
+  assert.equal(await readFile(join(directory, saved), 'utf8'), 'old private swarm control');
+  assert.deepEqual(await readFile(join(directory, 'source.torrent')), original);
+  await writeFile(control, 'new public swarm control');
+  const second = await stageNrkTorrent({ directory, bytes, info: inspectTorrent(bytes), signal: new AbortController().signal });
+  assert.equal(second.resumeRechecked, false); assert.equal(await readFile(control, 'utf8'), 'new public swarm control');
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(stageNrkTorrent({ directory, bytes: original, info: inspectTorrent(original), signal: controller.signal }));
+  assert.equal(await readFile(control, 'utf8'), 'new public swarm control');
 });
 
 test('subprocess diagnosis distinguishes storage and network failures without returning raw logs', async t => {

@@ -1,12 +1,13 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { mkdir, rename, stat, statfs, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, rename, stat, statfs, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fetch as proxyFetch, ProxyAgent } from 'undici';
 import { HttpError } from './validation.mjs';
 import { probeMedia } from './footage-media.mjs';
+import { inspectTorrent, sameTorrentContent } from './torrent-metadata.mjs';
 
-// Only this reviewed, single-file torrent is accepted. No user-supplied torrent,
+// Only this reviewed, single-file content is accepted. No user-supplied torrent,
 // URL, path, tracker or command can be passed to the downloader.
 export const FLAMSBANEN = Object.freeze({
   id: 'flamsbanen', title: 'Flåmsbanen · Myrdal → Flåm · NRK',
@@ -14,6 +15,8 @@ export const FLAMSBANEN = Object.freeze({
   torrentUrl: 'https://nrkbeta.no/torrent/Flamsbanen.hele.turen.1920x1080.h264.NRK.torrent',
   torrentSha256: '31c95678c89a16bd1d65abfe73a14f93193038aeb2c007a432db00e01b758475',
   infoHash: '218fafb2d888ad44e217f13e96c722bf4fd83920',
+  pieceLength: 262144, piecesSha256: 'd2ef10b5c5c66468c716b00e0c9c056be3971f517b789626de2e33caa8f67326',
+  mirrorUrl: 'https://trainfulness.nytsoi.net/torrents/flamsbanen.hele.turen.1920x1080.h264.Nrk.mp4.torrent',
   sourceUrl: 'https://nrkbeta.no/2010/09/03/last-ned-flaamsbana-i-2d-og-3d/',
   license: 'cc-by-sa-3.0-no', licenseUrl: 'https://creativecommons.org/licenses/by-sa/3.0/no/',
   attribution: '“Flåmsbanen” – NRK · http://nrkbeta.no/ · http://nrkbeta.no/bergensbanen',
@@ -30,7 +33,7 @@ export function parseAriaProgress(line) {
 export const ariaDownloadArgs = (directory, torrent) => [
   '--no-conf=true', '--enable-color=false', '--human-readable=false', '--summary-interval=2',
   '--console-log-level=warn', '--download-result=hide', '--file-allocation=none',
-  '--continue=true', '--check-integrity=true', '--auto-file-renaming=false',
+  '--continue=true', '--check-integrity=true', '--allow-overwrite=true', '--auto-file-renaming=false',
   '--seed-time=0', '--bt-stop-timeout=180', '--stop=3600', '--bt-max-peers=30',
   '--max-overall-download-limit=20M', '--max-overall-upload-limit=512K', '--disk-cache=8M',
   `--dir=${directory}`, torrent,
@@ -44,7 +47,7 @@ function ariaFailure(diagnostic) {
   if ([25, 26].includes(code)) return ['metadata', 'O aria2 não conseguiu interpretar os metadados do torrent. A fonte e o programa precisam ser conferidos.'];
   if (code === 19) return ['network', 'O aria2 informou uma falha de resolução de endereço (DNS). Confira a conexão do servidor.'];
   if (diagnostic.signal) return ['interrupted', `O processo de download foi encerrado (${diagnostic.signal}). As partes recebidas foram preservadas.`];
-  if (diagnostic.elapsedSeconds >= 170 && diagnostic.completed === 0) return ['no_transfer', `A tentativa terminou após ${diagnostic.elapsedSeconds}s sem registrar dados recebidos. Não foi possível confirmar se a fonte está indisponível ou se a conexão falhou. Este torrent depende dos rastreadores publicados pela NRK.`];
+  if (diagnostic.elapsedSeconds >= 170 && diagnostic.completed === 0) return ['no_transfer', `A tentativa terminou após ${diagnostic.elapsedSeconds}s sem registrar dados recebidos. Não foi possível confirmar se a fonte está indisponível ou se a conexão falhou. Confira a fonte utilizada e as conexões no diagnóstico.`];
   if ([2, 5, 6].includes(code)) return ['network', 'O aria2 encerrou a tentativa por tempo de espera, conexão ou velocidade insuficiente. A causa exata precisa ser conferida no diagnóstico.'];
   if (code === 7) return ['incomplete', 'A transferência ficou incompleta. Confira as conexões e as falhas registradas no diagnóstico antes de retomar.'];
   return ['unknown', 'O aria2 encerrou a transferência sem concluir o arquivo. O diagnóstico registra o código de saída; isso não confirma ausência de fontes.'];
@@ -99,34 +102,80 @@ export async function runAriaDownload({ directory, torrent, signal, onProgress =
   });
 }
 
-export async function downloadNrkTorrent({ directory, signal, onProgress, onDiagnostic, fetchImpl, binary = 'aria2c' }) {
+export function validateFlamsbanenMirror(bytes, reference = FLAMSBANEN) {
+  let info;
+  try { info = inspectTorrent(bytes); }
+  catch { throw new HttpError(502, 'O espelho não retornou metadados válidos de arquivo único. Nenhuma transferência foi iniciada.'); }
+  if (!sameTorrentContent(info, reference) || info.filename !== reference.filename) throw new HttpError(502, 'O espelho não descreve o mesmo vídeo oficial da Flåmsbanen. A transferência foi bloqueada; as partes existentes foram preservadas.');
+  if (info.privateTorrent) throw new HttpError(502, 'O torrent do espelho também é privado. Ele precisa ser conferido antes de substituir a fonte anterior.');
+  if (info.hasWebSeeds) throw new HttpError(502, 'O espelho contém fontes HTTP adicionais ainda não conferidas. Nenhuma transferência foi iniciada.');
+  return info;
+}
+
+// A different info hash can describe the same video parts. Preserve the old
+// resume control file, then let aria2 recheck the existing media against the
+// verified public torrent. Never delete or duplicate the media to change swarm.
+export async function stageNrkTorrent({ directory, bytes, info, signal }) {
+  signal.throwIfAborted();
+  const torrent = join(directory, 'active-source.torrent');
+  let previous;
+  for (const candidate of [torrent, join(directory, 'source.torrent')]) {
+    try { if ((await stat(candidate)).size <= 500000) { previous = inspectTorrent(await readFile(candidate)); break; } }
+    catch (error) { if (error.code && error.code !== 'ENOENT') throw error; }
+  }
+  let resumeRechecked = false;
+  if (previous?.infoHash !== info.infoHash) {
+    const control = join(directory, `${FLAMSBANEN.filename}.aria2`);
+    try { await rename(control, `${control}.preserved-${randomUUID()}`); resumeRechecked = true; }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  signal.throwIfAborted();
+  const pending = `${torrent}.next`;
+  await writeFile(pending, bytes, { mode: 0o600 }); await rename(pending, torrent);
+  return { torrent, resumeRechecked };
+}
+
+export async function downloadNrkTorrent({ directory, signal, onProgress, onDiagnostic = () => {}, fetchImpl, binary = 'aria2c', source = 'mirror' }) {
+  if (!['mirror', 'official'].includes(source)) throw new HttpError(400, 'Fonte NRK não reconhecida.');
+  const mirror = source === 'mirror';
   const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
   const dispatcher = !fetchImpl && proxy ? new ProxyAgent(proxy) : null;
   try {
     let response;
     try {
-      response = await (fetchImpl || proxyFetch)(FLAMSBANEN.torrentUrl, {
-        signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]), redirect: 'error',
-        ...(dispatcher ? { dispatcher } : {}),
-      });
-    } catch { throw new HttpError(502, 'Não foi possível obter o torrent oficial da NRK. A transferência pode ser tentada novamente.'); }
-    if (!response.ok || !response.body) { await response.body?.cancel(); throw new HttpError(502, 'A NRK não disponibilizou o torrent oficial neste momento.'); }
+      const original = new URL(mirror ? FLAMSBANEN.mirrorUrl : FLAMSBANEN.torrentUrl);
+      const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(30000)]);
+      let current = original;
+      for (let redirects = 0; ; redirects++) {
+        response = await (fetchImpl || proxyFetch)(current.href, {
+          signal: requestSignal, redirect: mirror ? 'manual' : 'error', ...(dispatcher ? { dispatcher } : {}),
+        });
+        if (!mirror || ![301, 302, 303, 307, 308].includes(response.status)) break;
+        const location = response.headers.get('location'); await response.body?.cancel();
+        if (!location || redirects >= 3) throw new Error('Redirecionamento fora do limite.');
+        const next = new URL(location, current);
+        if (next.protocol !== 'https:' || next.hostname !== original.hostname || next.username || next.password || next.port) throw new Error('Redirecionamento não conferido.');
+        current = next;
+      }
+    } catch { signal.throwIfAborted(); throw new HttpError(502, mirror ? 'Não foi possível consultar o torrent do espelho Nytsoi. Nenhuma transferência foi iniciada; as partes anteriores foram preservadas.' : 'Não foi possível obter o torrent oficial da NRK. A transferência pode ser tentada novamente.'); }
+    if (!response.ok || !response.body) { await response.body?.cancel(); throw new HttpError(502, mirror ? 'O espelho Nytsoi não disponibilizou os metadados neste momento. Tente retomar mais tarde.' : 'A NRK não disponibilizou o torrent oficial neste momento.'); }
     const chunks = []; let size = 0;
     const reader = response.body.getReader();
     try {
       while (true) {
         const { value, done } = await reader.read(); if (done) break;
         size += value.length;
-        if (size > 500000) { await reader.cancel(); throw new HttpError(502, 'O torrent oficial excedeu o tamanho esperado.'); }
+        if (size > 500000) { await reader.cancel(); throw new HttpError(502, 'O torrent excedeu o tamanho esperado.'); }
         chunks.push(value);
       }
     } finally { reader.releaseLock(); }
     const bytes = Buffer.concat(chunks);
-    if (createHash('sha256').update(bytes).digest('hex') !== FLAMSBANEN.torrentSha256) throw new HttpError(502, 'O torrent oficial mudou. A fonte precisa ser conferida antes de baixar.');
-    signal.throwIfAborted();
-    const torrent = join(directory, 'source.torrent');
-    await writeFile(torrent, bytes, { mode: 0o600 });
-    await runAriaDownload({ directory, torrent, signal, onProgress, onDiagnostic, binary });
+    if (!mirror && createHash('sha256').update(bytes).digest('hex') !== FLAMSBANEN.torrentSha256) throw new HttpError(502, 'O torrent oficial mudou. A fonte precisa ser conferida antes de baixar.');
+    const info = mirror ? validateFlamsbanenMirror(bytes) : inspectTorrent(bytes);
+    const { torrent, resumeRechecked } = await stageNrkTorrent({ directory, bytes, info, signal });
+    const sourceInfo = { source: mirror ? 'nytsoi' : 'nrk', contentVerified: true, privateTorrent: info.privateTorrent, resumeRechecked };
+    await runAriaDownload({ directory, torrent, signal, onProgress,
+      onDiagnostic: value => onDiagnostic({ ...value, ...sourceInfo }), binary });
     // A stopped torrent can leave a full-sized sparse file. Length alone is not
     // proof of completion: aria2 must also have removed its resume control file.
     const path = join(directory, FLAMSBANEN.filename);

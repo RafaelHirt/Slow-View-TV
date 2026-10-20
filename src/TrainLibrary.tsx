@@ -83,13 +83,15 @@ export function TrainLibrary({ onLibrary, onOpenAsset }: { onLibrary: () => void
         </>}
         {(error || loadError || download?.error) && <p className="ft-error" role="alert">{error || loadError || download?.error}</p>}
         {download?.diagnostics && <details className="ft-download-diagnostics"><summary>Diagnóstico da tentativa</summary><dl>
+          {download.diagnostics.source && <div><dt>Fonte da transferência</dt><dd>{download.diagnostics.source === 'nytsoi' ? 'Espelho Nytsoi · conteúdo conferido com a NRK' : 'Torrent oficial NRK'}</dd></div>}
+          {download.diagnostics.privateTorrent !== undefined && <div><dt>Descoberta de fontes</dt><dd>{download.diagnostics.privateTorrent ? 'Torrent privado · depende dos rastreadores' : 'Torrent público · permite descoberta DHT'}</dd></div>}
           <div><dt>Duração registrada</dt><dd>{download.diagnostics.elapsedSeconds}s</dd></div>
           <div><dt>Maior número de conexões</dt><dd>{download.diagnostics.maxConnections ?? 'Não informado pelo programa'}</dd></div>
           <div><dt>Fontes completas conectadas</dt><dd>{download.diagnostics.maxSeeders ?? 'Não informado pelo programa'}</dd></div>
           <div><dt>Falhas de rastreador registradas</dt><dd>{download.diagnostics.trackerFailures}</dd></div>
           <div><dt>Código de saída</dt><dd>{download.diagnostics.exitCode ?? (download.diagnostics.signal || 'Ainda em execução')}</dd></div>
           {!!download.diagnostics.errorCodes.length && <div><dt>Códigos de erro registrados</dt><dd>{download.diagnostics.errorCodes.join(', ')}</dd></div>}
-        </dl><p>Esses dados ajudam a distinguir falha de conexão, armazenamento e transferência incompleta. Zero conexões não comprova que o arquivo deixou de existir.</p></details>}
+        </dl>{download.diagnostics.resumeRechecked && <p>As partes anteriores foram preservadas e serão conferidas para continuar pelo novo torrent.</p>}<p>Esses dados ajudam a distinguir falha de conexão, armazenamento e transferência incompleta. Zero conexões não comprova que o arquivo deixou de existir.</p></details>}
         <p>Conferir o som e a imagem faz parte da preparação. A edição mantém créditos NRK e licença CC BY-SA.</p>
       </div>}
       <a className="ft-button" href={journey.sourceUrl} target="_blank" rel="noreferrer">Ver publicação da viagem <ArrowUpRight size={15} /></a>

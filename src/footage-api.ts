@@ -21,7 +21,9 @@ export type NrkImport = {
   enabled: boolean; available: boolean;
   source: { id: string; title: string; bytes: number; licenseUrl: string };
   download: null | { status: 'downloading' | 'verifying' | 'paused' | 'failed' | 'ready'; completed: number; total: number; error: string | null; assetId: string | null; asset?: FootageAsset;
-    diagnostics?: { exitCode: number | null; signal: string | null; elapsedSeconds: number; completed: number; maxConnections: number | null; maxSeeders: number | null; trackerFailures: number; errorCodes: number[]; reason: string | null } | null;
+    diagnostics?: { exitCode: number | null; signal: string | null; elapsedSeconds: number; completed: number; maxConnections: number | null; maxSeeders: number | null; trackerFailures: number; errorCodes: number[]; reason: string | null;
+      source?: 'nytsoi' | 'nrk'; contentVerified?: boolean; privateTorrent?: boolean; resumeRechecked?: boolean;
+    } | null;
   };
 };
 export type StockVideo = { id: string; title: string; sourceUrl: string; author: string; duration: number; width: number; height: number; fileUrl: string };
