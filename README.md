@@ -10,6 +10,7 @@ O protótipo procedural anterior foi preservado em `/prototype`, com seus dados 
 
 ## Filmagens reais
 
+- [Separar uma amostra original no Windows](docs/local-review.md), usando FFmpeg já instalado, sem Node.js no computador do usuário. Primeiro avaliamos a filmagem; filtros e versões completas vêm depois.
 - Biblioteca de MP4/WebM e áudio MP3/WAV, com origem, créditos, licença e conferência de direitos.
 - [Importação da Flåmsbanen/NRK no RunPod](docs/nrk-flamsbanen-pilot.md), com pausa/retomada e créditos CC BY-SA; disponibilidade do vídeo depende das fontes do torrent, ainda não comprovadas no Pod.
 - Envio de arquivos ou importação de links diretos dos CDNs Pexels/Pixabay. Busca Pexels quando configurada; links de páginas e do YouTube não são arquivos importáveis.
