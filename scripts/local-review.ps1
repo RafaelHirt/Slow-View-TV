@@ -28,7 +28,7 @@ try {
     if ($source.PSIsContainer -or $source.Extension -ine '.mp4') { throw 'Selecione o video MP4, nao a pasta nem o torrent.'; };
     if (-not $FFmpegPath) {
         $known = 'D:\ffmpeg-9.0.2-essentials_build\bin\ffmpeg.exe';
-        $installed = Get-Command ffmpeg -CommandType Application -ErrorAction SilentlyContinue;
+        $installed = Get-Command ffmpeg -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1;
         if (Test-Path -LiteralPath $known -PathType Leaf) { $FFmpegPath = $known; }
         elseif ($installed) { $FFmpegPath = $installed.Source; }
         else { $FFmpegPath = Select-LocalFile 'Selecione ffmpeg.exe na pasta bin do FFmpeg ja extraido' 'FFmpeg (ffmpeg.exe)|ffmpeg.exe'; };

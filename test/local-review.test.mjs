@@ -33,7 +33,7 @@ async function probe(file) {
 }
 async function digest(file) { return createHash('sha256').update(await readFile(file)).digest('hex'); }
 async function run(input, args = [], env = {}) {
-  const resolvedFFmpeg = (await execute(pwsh, ['-NoProfile', '-Command', `(Get-Command '${ffmpeg.replaceAll("'", "''")}' -CommandType Application).Source`])).stdout.trim();
+  const resolvedFFmpeg = (await execute(pwsh, ['-NoProfile', '-Command', `(Get-Command '${ffmpeg.replaceAll("'", "''")}' -CommandType Application | Select-Object -First 1).Source`])).stdout.trim();
   return execute(pwsh, ['-NoLogo', '-NoProfile', '-File', script, '-InputPath', input,
     '-FFmpegPath', resolvedFFmpeg, '-NoOpen', ...args], { timeout: 30000, env: { ...process.env, ...env } });
 }
@@ -136,7 +136,8 @@ mediaTest('invalid media, missing paths and torrent files fail before creating o
 mediaTest('missing companion FFprobe fails with a clear message without touching the source', async t => {
   const folder = await directory(t), input = await fixture(folder);
   const executable = join(folder, 'ffmpeg.exe'); await writeFile(executable, 'not executed');
-  await assert.rejects(run(input, ['-FFmpegPath', executable]), error => error.stdout.includes('FFprobe nao encontrado'));
+  await assert.rejects(execute(pwsh, ['-NoProfile', '-File', script, '-InputPath', input, '-FFmpegPath', executable, '-NoOpen']),
+    error => error.stdout.includes('FFprobe nao encontrado'));
   assert.deepEqual(await outputs(folder), []);
 });
 
