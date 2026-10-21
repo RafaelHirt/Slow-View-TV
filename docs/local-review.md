@@ -8,9 +8,13 @@ não usa RunPod. Os ajustes vêm depois de analisar a filmagem e ouvir o som.
 
 1. Extraia o ZIP inteiro com **Extrair tudo**.
 2. Abra `1-separar-trecho.cmd` e selecione o **MP4 original da viagem**.
-   Também pode arrastar o MP4 sobre esse atalho.
+   Use dois cliques: o atalho ignora arquivos arrastados e argumentos externos.
 3. Ao aparecer **PRONTO**, a pasta do resultado será aberta. Envie somente
    `trecho-original.mp4` na conversa. Não é necessário enviar o vídeo completo.
+
+Se a pasta não abrir automaticamente, será mostrado **AVISO**, junto ao
+caminho para abri-la manualmente. Isso não significa que a extração falhou:
+o vídeo continua pronto. **ERRO** fica reservado às falhas no preparo do trecho.
 
 Não precisa instalar Node.js. Usa o PowerShell que acompanha o Windows 10/11
 e os executáveis FFmpeg e FFprobe já extraídos. Reconhece o FFmpeg em
@@ -54,6 +58,7 @@ node --test test/local-review.test.mjs
 ```
 
 O corpo PowerShell e o corpo literal do atalho são testados no Linux com
-FFmpeg e vídeos técnicos gerados para o teste. Isso não valida o CMD, a janela
+FFmpeg e vídeos técnicos gerados para o teste, incluindo uma falha simulada
+na abertura da pasta e a seleção simulada do arquivo. Isso não valida o CMD, a janela
 de seleção, as políticas do Windows, nem o áudio/imagem da Flåmsbanen real.
 A primeira execução no Windows ainda precisa ser conferida.

@@ -49,7 +49,8 @@ test('package contains an ASCII, CRLF launcher below CMD limits with no executio
   const command = launcher.split('\r\n').find(line => line.startsWith('powershell.exe '));
   assert.ok(command.length < 7800);
   assert.match(launcher, /setlocal DisableDelayedExpansion/);
-  assert.match(launcher, /set "SLOWVIEW_REVIEW_INPUT=%~1"/);
+  assert.match(command, /\$InputPath = \$null;/);
+  assert.doesNotMatch(launcher, /%~?\d|%\*|SLOWVIEW_REVIEW_INPUT/);
   assert.match(launcher, /set "result=%errorlevel%"/);
   assert.doesNotMatch(launcher, /ExecutionPolicy|Invoke-Expression|EncodedCommand/i);
   assert.deepEqual((await readdir(folder)).sort(), ['1-separar-trecho.cmd', 'LEIA-ME.txt', 'local-review.ps1']);
@@ -108,19 +109,40 @@ mediaTest('short silent source works and repeated runs create separate folders',
   assert.equal(await digest(input), before);
 });
 
-mediaTest('literal command embedded in the downloadable launcher parses and runs with a filename from environment', async t => {
+mediaTest('literal launcher uses the file picker, ignoring the old inherited input variable', async t => {
   const folder = await directory(t), input = await fixture(folder);
   const packaged = join(folder, 'package');
   await execute(process.execPath, ['scripts/package-local-review.mjs', packaged]);
   const launcher = await readFile(join(packaged, '1-separar-trecho.cmd'), 'utf8');
   const line = launcher.split('\r\n').find(value => value.startsWith('powershell.exe '));
   const command = line.slice(line.indexOf('-Command "') + '-Command "'.length, -1);
-  // NoOpen skips only the final folder viewer. The literal default code is otherwise unchanged.
-  const tested = command.replace('$NoOpen = $false;', '$NoOpen = $true;');
+  // Mock the GUI picker and skip only the final folder viewer on Linux.
+  const marker = 'try { if (-not $InputPath)';
+  assert.ok(command.includes(marker));
+  const tested = command.replace('$NoOpen = $false;', '$NoOpen = $true;').replace(marker,
+    `function Select-LocalFile { Write-Host 'FILE_PICKER_USED'; return $env:SLOWVIEW_TEST_PICKED_FILE; }; ${marker}`);
   const result = await execute(pwsh, ['-NoProfile', '-Command', tested], {
-    env: { ...process.env, SLOWVIEW_REVIEW_INPUT: input }, timeout: 30000,
+    env: { ...process.env, SLOWVIEW_TEST_PICKED_FILE: input, SLOWVIEW_REVIEW_INPUT: join(folder, 'ignored.mp4') }, timeout: 30000,
   });
-  assert.match(result.stdout, /PRONTO/); assert.equal((await outputs(folder)).length, 1);
+  assert.match(result.stdout, /FILE_PICKER_USED/); assert.match(result.stdout, /PRONTO/);
+  const [output] = await outputs(folder);
+  const report = JSON.parse((await readFile(join(output, 'informacoes.json'), 'utf8')).replace(/^\uFEFF/, ''));
+  assert.equal(report.original, input);
+});
+
+mediaTest('failure to open the folder is only a warning and keeps the valid clip and successful exit', async t => {
+  const folder = await directory(t), input = await fixture(folder), before = await digest(input);
+  const result = await execute(pwsh, ['-NoProfile', '-Command',
+    "function global:Invoke-Item { param([string]$LiteralPath); throw 'Simulated folder failure'; }; & $env:SLOWVIEW_TEST_SCRIPT -InputPath $env:SLOWVIEW_TEST_PICKED_FILE -Start 0 -Duration 2"], {
+    env: { ...process.env, SLOWVIEW_TEST_SCRIPT: script, SLOWVIEW_TEST_PICKED_FILE: input }, timeout: 30000,
+  });
+  assert.match(result.stdout, /PRONTO/); assert.match(result.stdout, /AVISO: O trecho esta pronto/);
+  assert.doesNotMatch(result.stdout, /ERRO:/);
+  const [output] = await outputs(folder);
+  assert.ok(Number((await probe(join(output, 'trecho-original.mp4'))).format.duration) > 0);
+  assert.ok((await readFile(join(output, 'informacoes.json'))).length > 0);
+  assert.ok(result.stdout.includes(output));
+  assert.equal(await digest(input), before);
 });
 
 mediaTest('invalid media, missing paths and torrent files fail before creating output', async t => {

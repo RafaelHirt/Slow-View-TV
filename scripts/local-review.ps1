@@ -1,5 +1,5 @@
 param(
-    [string]$InputPath = $env:SLOWVIEW_REVIEW_INPUT,
+    [string]$InputPath,
     [string]$FFmpegPath,
     [ValidateRange(0, 86400)][double]$Start = 600,
     [ValidateRange(1, 120)][double]$Duration = 45,
@@ -60,7 +60,10 @@ try {
     $report | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $folder 'informacoes.json') -Encoding UTF8;
     Write-Host ('PRONTO. Anexe somente este video na conversa: ' + $clip);
     Write-Host 'O original foi preservado. Nenhuma live ou publicacao foi iniciada.';
-    if (-not $NoOpen) { Invoke-Item -LiteralPath $folder; };
+    if (-not $NoOpen) {
+        try { Invoke-Item -LiteralPath $folder; }
+        catch { Write-Host ('AVISO: O trecho esta pronto, mas a pasta nao abriu. Abra manualmente: ' + $folder); };
+    };
     exit 0;
 } catch {
     Write-Host ('ERRO: ' + $_.Exception.Message);
